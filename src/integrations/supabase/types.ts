@@ -54,29 +54,35 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string
+          email_notifications_enabled: boolean
           email: string
           full_name: string | null
           id: string
           updated_at: string
           user_id: string
+          weekly_reports_enabled: boolean
         }
         Insert: {
           avatar_url?: string | null
           created_at?: string
+          email_notifications_enabled?: boolean
           email: string
           full_name?: string | null
           id?: string
           updated_at?: string
           user_id: string
+          weekly_reports_enabled?: boolean
         }
         Update: {
           avatar_url?: string | null
           created_at?: string
+          email_notifications_enabled?: boolean
           email?: string
           full_name?: string | null
           id?: string
           updated_at?: string
           user_id?: string
+          weekly_reports_enabled?: boolean
         }
         Relationships: []
       }

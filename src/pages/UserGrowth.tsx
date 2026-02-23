@@ -1,67 +1,107 @@
-import { useState, useRef } from "react";
-import { Users, UserPlus, TrendingUp, Activity, Upload, Plus, Loader2, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { Activity, AlertCircle, Plus, Upload, Users, UserPlus, TrendingUp, X } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { StatCard } from "@/components/ui/stat-card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { ChartCardSkeleton, StatCardSkeleton, TableSkeleton } from "@/components/ui/skeletons";
 import { UserGrowthChart } from "@/components/dashboard/UserGrowthChart";
 import { UserGrowthMetrics } from "@/components/dashboard/UserGrowthMetrics";
 import { FormattedNumber, FormattedPercent } from "@/components/ui/formatted-value";
 import { useMetrics } from "@/hooks/useMetrics";
 import { useApp } from "@/contexts/AppContext";
-import { toast } from "sonner";
 import { formatDate, getGrowthLabel } from "@/lib/format";
+import { parseCsv } from "@/lib/csv";
+import { calculateUserCadenceMetrics } from "@/lib/calculations";
+import { normalizeUserMetricInput, type UserMetricInput } from "@/lib/metric-input";
+
+const TODAY = () => new Date().toISOString().split("T")[0];
+
+const periodConfig = {
+  daily: { label: "Daily", unit: "users/day" },
+  weekly: { label: "Weekly", unit: "users/week" },
+  monthly: { label: "Monthly", unit: "users/30 days" },
+} as const;
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
 
 export default function UserGrowth() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedPeriod, setSelectedPeriod] = useState<"daily" | "weekly" | "monthly">("monthly");
-  const { metrics, userMetrics, addUserMetrics, loading } = useMetrics();
+  const { metrics, userMetrics, filteredUserMetrics, addUserMetrics, addUserMetricsBatch, loading, error } = useMetrics();
   const { isDemoMode } = useApp();
-  
+
   const [showForm, setShowForm] = useState(false);
   const [showCsvImport, setShowCsvImport] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [csvData, setCsvData] = useState<any[]>([]);
+  const [csvData, setCsvData] = useState<UserMetricInput[]>([]);
+  const [csvErrors, setCsvErrors] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   const [formData, setFormData] = useState({
-    date: new Date().toISOString().split('T')[0],
-    total_users: '',
-    new_users: '',
-    active_users: '',
-    churned_users: '',
+    date: TODAY(),
+    total_users: "",
+    new_users: "",
+    active_users: "",
+    churned_users: "",
   });
+
+  useEffect(() => {
+    const action = searchParams.get("action");
+    if (!action) return;
+
+    if (action === "add") {
+      setShowForm(true);
+    }
+
+    if (action === "import") {
+      fileInputRef.current?.click();
+    }
+
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.total_users) {
-      toast.error('Total users is required');
+      toast.error("Total users is required");
       return;
     }
 
     if (isDemoMode) {
-      toast.error('Cannot add data in demo mode');
+      toast.error("Cannot add data in demo mode");
       return;
     }
 
     setSubmitting(true);
     try {
-      await addUserMetrics({
+      const normalized = normalizeUserMetricInput({
         date: formData.date,
-        total_users: parseInt(formData.total_users),
-        new_users: parseInt(formData.new_users) || 0,
-        active_users: parseInt(formData.active_users) || 0,
-        churned_users: parseInt(formData.churned_users) || 0,
-        source: 'manual',
+        total_users: formData.total_users,
+        new_users: formData.new_users,
+        active_users: formData.active_users,
+        churned_users: formData.churned_users,
+        source: "manual",
       });
-      toast.success('User metrics saved!');
+
+      await addUserMetrics(normalized);
+      toast.success("User metrics saved");
       setShowForm(false);
       setFormData({
-        date: new Date().toISOString().split('T')[0],
-        total_users: '',
-        new_users: '',
-        active_users: '',
-        churned_users: '',
+        date: TODAY(),
+        total_users: "",
+        new_users: "",
+        active_users: "",
+        churned_users: "",
       });
-    } catch (error) {
-      toast.error('Error saving data');
+    } catch (submitError) {
+      toast.error(getErrorMessage(submitError, "Error saving data"));
     } finally {
       setSubmitting(false);
     }
@@ -75,25 +115,46 @@ export default function UserGrowth() {
     reader.onload = (event) => {
       try {
         const text = event.target?.result as string;
-        const lines = text.split('\n');
-        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-        
-        const parsed = lines.slice(1)
-          .filter(line => line.trim())
-          .map(line => {
-            const values = line.split(',');
-            const row: any = {};
-            headers.forEach((header, i) => {
-              row[header] = values[i]?.trim();
+        const rows = parseCsv(text);
+        const parsed: UserMetricInput[] = [];
+        const validationErrors: string[] = [];
+
+        rows.forEach((row, index) => {
+          try {
+            const normalized = normalizeUserMetricInput({
+              date: row.date || row.data || TODAY(),
+              total_users: row.total_users || row.total || 0,
+              new_users: row.new_users || row.novos || 0,
+              active_users: row.active_users || row.ativos || 0,
+              churned_users: row.churned_users || row.churn || 0,
+              source: "csv",
             });
-            return row;
-          });
-        
+
+            parsed.push(normalized);
+          } catch (rowError) {
+            validationErrors.push(`Row ${index + 2}: ${getErrorMessage(rowError, "Invalid data")}`);
+          }
+        });
+
+        if (parsed.length === 0) {
+          toast.error("No valid rows found in CSV");
+          setCsvData([]);
+          setCsvErrors(validationErrors);
+          setShowCsvImport(false);
+          return;
+        }
+
         setCsvData(parsed);
+        setCsvErrors(validationErrors);
         setShowCsvImport(true);
-        toast.success(`${parsed.length} rows imported`);
-      } catch (error) {
-        toast.error('Error processing CSV');
+
+        if (validationErrors.length > 0) {
+          toast.warning(`${parsed.length} valid rows loaded. ${validationErrors.length} rows were skipped.`);
+        } else {
+          toast.success(`${parsed.length} rows imported`);
+        }
+      } catch (csvError) {
+        toast.error(getErrorMessage(csvError, "Error processing CSV"));
       }
     };
     reader.readAsText(file);
@@ -101,53 +162,80 @@ export default function UserGrowth() {
 
   const handleImportCsv = async () => {
     if (isDemoMode) {
-      toast.error('Cannot import data in demo mode');
+      toast.error("Cannot import data in demo mode");
       return;
     }
 
     setSubmitting(true);
     try {
-      for (const row of csvData) {
-        await addUserMetrics({
-          date: row.date || row.data || new Date().toISOString().split('T')[0],
-          total_users: parseInt(row.total_users || row.total) || 0,
-          new_users: parseInt(row.new_users || row.novos) || 0,
-          active_users: parseInt(row.active_users || row.ativos) || 0,
-          churned_users: parseInt(row.churned_users || row.churn) || 0,
-          source: 'csv',
-        });
-      }
-      toast.success('Data imported successfully!');
+      await addUserMetricsBatch(csvData);
+
+      toast.success("Data imported successfully");
       setShowCsvImport(false);
       setCsvData([]);
-    } catch (error) {
-      toast.error('Error importing data');
+      setCsvErrors([]);
+    } catch (importError) {
+      toast.error(getErrorMessage(importError, "Error importing data"));
     } finally {
       setSubmitting(false);
     }
   };
 
   const growthLabel = getGrowthLabel(metrics.userGrowth);
+  const cadenceMetrics = calculateUserCadenceMetrics(filteredUserMetrics);
+  const selectedCadence = cadenceMetrics[selectedPeriod];
+  const selectedCadenceValue = selectedCadence.value !== null
+    ? Math.round(selectedCadence.value)
+    : null;
+  const selectedCadencePreciseValue = selectedCadence.value !== null
+    ? selectedCadence.value.toFixed(1)
+    : "—";
+  const selectedPeriodLabel = periodConfig[selectedPeriod].label;
+  const selectedPeriodUnit = periodConfig[selectedPeriod].unit;
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="page-section animate-fade-in">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+        </div>
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <ChartCardSkeleton />
+          <ChartCardSkeleton />
+        </div>
+        <TableSkeleton />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">User Growth</h1>
-          <p className="text-muted-foreground">
-            Track user acquisition and growth
-            {isDemoMode && <span className="ml-2 text-warning">(Demo Mode)</span>}
-          </p>
+    <div className="page-section animate-fade-in">
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Unable to load user metrics</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {!metrics.hasUserData && !isDemoMode && (
+        <EmptyState
+          icon={Users}
+          title="No user data yet"
+          description="Start with your first user snapshot to unlock growth analytics and trend tracking."
+          actionLabel="Add user metrics"
+          onAction={() => setShowForm(true)}
+        />
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-sm text-muted-foreground">
+          {isDemoMode ? "Demo data mode is enabled." : "Use manual entries or CSV to keep user metrics up to date."}
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           <input
             ref={fileInputRef}
             type="file"
@@ -155,39 +243,35 @@ export default function UserGrowth() {
             onChange={handleCsvUpload}
             className="hidden"
           />
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isDemoMode}
-          >
+          <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isDemoMode}>
             <Upload className="mr-2 h-4 w-4" />
             Import CSV
           </Button>
-          <Button 
-            size="sm" 
-            onClick={() => setShowForm(!showForm)}
-            disabled={isDemoMode}
-          >
+          <Button size="sm" onClick={() => setShowForm((prev) => !prev)} disabled={isDemoMode}>
             <Plus className="mr-2 h-4 w-4" />
             Add Metrics
           </Button>
         </div>
       </div>
 
-      {/* CSV Import Preview */}
       {showCsvImport && (
         <div className="metric-card">
-          <div className="flex items-center justify-between mb-4">
+          <div className="mb-4 flex items-center justify-between">
             <h3 className="text-lg font-semibold text-foreground">Import Preview</h3>
             <Button variant="ghost" size="sm" onClick={() => setShowCsvImport(false)}>
               <X className="h-4 w-4" />
             </Button>
           </div>
-          <p className="text-sm text-muted-foreground mb-4">{csvData.length} records to import</p>
+          <p className="mb-4 text-sm text-muted-foreground">{csvData.length} valid records ready to import.</p>
+          {csvErrors.length > 0 && (
+            <div className="mb-4 rounded-lg border border-warning/20 bg-warning/10 p-3 text-sm text-warning-foreground">
+              <p className="font-medium">{csvErrors.length} rows skipped due to validation errors.</p>
+              <p className="mt-1 text-xs text-muted-foreground">{csvErrors.slice(0, 3).join(" • ")}</p>
+            </div>
+          )}
           <div className="flex gap-2">
             <Button onClick={handleImportCsv} disabled={submitting}>
-              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm Import'}
+              {submitting ? "Importing..." : "Confirm Import"}
             </Button>
             <Button variant="outline" onClick={() => setShowCsvImport(false)}>
               Cancel
@@ -196,11 +280,10 @@ export default function UserGrowth() {
         </div>
       )}
 
-      {/* Form */}
       {showForm && (
         <div className="metric-card">
-          <h3 className="text-lg font-semibold text-foreground mb-4">Add User Metrics</h3>
-          <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+          <h3 className="mb-4 text-lg font-semibold text-foreground">Add User Metrics</h3>
+          <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             <div>
               <label className="text-sm font-medium text-muted-foreground">Date</label>
               <Input
@@ -250,9 +333,9 @@ export default function UserGrowth() {
                 className="mt-1"
               />
             </div>
-            <div className="lg:col-span-5 flex gap-2">
+            <div className="flex gap-2 xl:col-span-5">
               <Button type="submit" disabled={submitting}>
-                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
+                {submitting ? "Saving..." : "Save"}
               </Button>
               <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
                 Cancel
@@ -262,133 +345,109 @@ export default function UserGrowth() {
         </div>
       )}
 
-      {/* Period Selector */}
-      <div className="flex gap-2">
-        {(["daily", "weekly", "monthly"] as const).map((period) => (
-          <button
-            key={period}
-            onClick={() => setSelectedPeriod(period)}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-              selectedPeriod === period
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground"
-            }`}
-          >
-            {period === "daily" ? "Daily" : period === "weekly" ? "Weekly" : "Monthly"}
-          </button>
-        ))}
+      <SegmentedControl
+        value={selectedPeriod}
+        onChange={setSelectedPeriod}
+        options={[
+          { value: "daily", label: "Daily" },
+          { value: "weekly", label: "Weekly" },
+          { value: "monthly", label: "Monthly" },
+        ]}
+      />
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Total Users"
+          value={<FormattedNumber value={metrics.totalUsers} />}
+          delta={metrics.hasUserData ? metrics.userGrowth : null}
+          deltaLabel="month over month"
+          icon={Users}
+          empty={!metrics.hasUserData}
+          emptyText="Add user snapshots"
+        />
+        <StatCard
+          label={`New Users (${selectedPeriodLabel})`}
+          value={<FormattedNumber value={selectedCadenceValue} />}
+          delta={metrics.hasUserData ? selectedCadence.change : null}
+          deltaLabel={`vs previous ${selectedPeriod.toLowerCase()} cadence`}
+          icon={UserPlus}
+          empty={!metrics.hasUserData}
+          emptyText={`Needs ${selectedPeriod.toLowerCase()} snapshots`}
+        />
+        <StatCard
+          label="Growth Rate"
+          value={<FormattedPercent value={metrics.userGrowth} className="text-2xl font-bold" />}
+          delta={metrics.hasUserData ? metrics.userGrowth : null}
+          deltaLabel="month over month"
+          icon={TrendingUp}
+          empty={!metrics.hasUserData}
+          emptyText="Needs monthly user data"
+        />
+        <StatCard
+          label="User Cadence"
+          value={selectedCadencePreciseValue}
+          delta={metrics.hasUserData ? selectedCadence.change : null}
+          deltaLabel={`${selectedPeriodUnit} • ${growthLabel.symbol} ${growthLabel.label}`}
+          icon={Activity}
+          empty={!metrics.hasUserData}
+          emptyText="Needs recurring snapshots"
+        />
       </div>
 
-      {/* Main Metrics */}
-      <div className="grid gap-6 md:grid-cols-4">
-        <div className="metric-card">
-          <div className="flex items-center gap-2 mb-2">
-            <Users className="h-4 w-4 text-chart-2/70" />
-            <span className="text-sm text-muted-foreground">Total Users</span>
-          </div>
-          <p className="text-3xl font-bold text-foreground whitespace-nowrap tabular-nums">
-            <FormattedNumber value={metrics.totalUsers} />
-          </p>
-          {metrics.hasUserData && metrics.userGrowth !== null ? (
-            <p className="text-sm mt-1 tabular-nums">
-              <FormattedPercent value={metrics.userGrowth} showSign colorize /> MoM
-            </p>
-          ) : (
-            <p className="text-sm mt-1 text-muted-foreground">—</p>
-          )}
-        </div>
-        <div className="metric-card">
-          <div className="flex items-center gap-2 mb-2">
-            <UserPlus className="h-4 w-4 text-chart-2/70" />
-            <span className="text-sm text-muted-foreground">New Users (30d)</span>
-          </div>
-          <p className="text-3xl font-bold text-foreground whitespace-nowrap tabular-nums">
-            <FormattedNumber value={metrics.newUsers} />
-          </p>
-          {metrics.hasUserData && metrics.userGrowth !== null ? (
-            <p className="text-sm text-success mt-1 tabular-nums">
-              <FormattedPercent value={metrics.userGrowth} showSign /> vs previous
-            </p>
-          ) : (
-            <p className="text-sm mt-1 text-muted-foreground">—</p>
-          )}
-        </div>
-        <div className="metric-card">
-          <div className="flex items-center gap-2 mb-2">
-            <TrendingUp className="h-4 w-4 text-chart-2/70" />
-            <span className="text-sm text-muted-foreground">Growth Rate</span>
-          </div>
-          <p className="text-3xl font-bold text-foreground whitespace-nowrap tabular-nums">
-            <FormattedPercent value={metrics.userGrowth} />
-          </p>
-          <p className="text-sm text-muted-foreground mt-1">Month over month</p>
-        </div>
-        <div className="metric-card">
-          <div className="flex items-center gap-2 mb-2">
-            <Activity className="h-4 w-4 text-chart-2/70" />
-            <span className="text-sm text-muted-foreground">Daily Signups (avg)</span>
-          </div>
-          <p className="text-3xl font-bold text-foreground whitespace-nowrap tabular-nums">
-            {metrics.avgDailySignups !== null ? metrics.avgDailySignups.toFixed(1) : '—'}
-          </p>
-          <p className="text-sm mt-1 text-muted-foreground">
-            {growthLabel.emoji} {growthLabel.label}
-          </p>
-        </div>
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <UserGrowthChart />
+        <UserGrowthMetrics />
       </div>
 
-      {/* Charts */}
-      {metrics.hasUserData && (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <UserGrowthChart />
-          <UserGrowthMetrics />
-        </div>
-      )}
-
-      {/* History */}
-      {userMetrics.length > 0 && (
-        <div className="metric-card">
-          <h3 className="text-lg font-semibold text-foreground mb-4">Metrics History</h3>
+      <div className="metric-card">
+        <h3 className="mb-4 text-lg font-semibold text-foreground">Metrics History</h3>
+        {userMetrics.length === 0 ? (
+          <EmptyState
+            icon={Users}
+            title="No history yet"
+            description="Once you add user snapshots, this table will show the latest entries."
+            actionLabel="Add metrics"
+            onAction={() => setShowForm(true)}
+          />
+        ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[720px]">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="text-left py-3 px-2 text-sm font-medium text-muted-foreground">Date</th>
-                  <th className="text-right py-3 px-2 text-sm font-medium text-muted-foreground">Total</th>
-                  <th className="text-right py-3 px-2 text-sm font-medium text-muted-foreground">New</th>
-                  <th className="text-right py-3 px-2 text-sm font-medium text-muted-foreground">Active</th>
-                  <th className="text-right py-3 px-2 text-sm font-medium text-muted-foreground">Churned</th>
-                  <th className="text-left py-3 px-2 text-sm font-medium text-muted-foreground">Source</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Date</th>
+                  <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total</th>
+                  <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">New</th>
+                  <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Active</th>
+                  <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Churned</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Source</th>
                 </tr>
               </thead>
               <tbody>
                 {userMetrics.slice(0, 10).map((metric) => (
-                  <tr key={metric.id} className="border-b border-border/50 hover:bg-muted/30">
-                    <td className="py-3 px-2 text-sm text-foreground whitespace-nowrap">
-                      {formatDate(metric.date)}
-                    </td>
-                    <td className="py-3 px-2 text-sm text-foreground text-right font-medium whitespace-nowrap tabular-nums">
+                  <tr key={metric.id} className="border-b border-border/60 hover:bg-muted/20">
+                    <td className="px-3 py-3 text-sm text-foreground">{formatDate(metric.date)}</td>
+                    <td className="px-3 py-3 text-right text-sm font-medium text-foreground">
                       <FormattedNumber value={metric.total_users} />
                     </td>
-                    <td className="py-3 px-2 text-sm text-success text-right whitespace-nowrap tabular-nums">
+                    <td className="px-3 py-3 text-right text-sm text-success">
                       +<FormattedNumber value={metric.new_users} />
                     </td>
-                    <td className="py-3 px-2 text-sm text-foreground text-right whitespace-nowrap tabular-nums">
+                    <td className="px-3 py-3 text-right text-sm text-foreground">
                       <FormattedNumber value={metric.active_users} />
                     </td>
-                    <td className="py-3 px-2 text-sm text-destructive text-right whitespace-nowrap tabular-nums">
+                    <td className="px-3 py-3 text-right text-sm text-destructive">
                       -<FormattedNumber value={metric.churned_users} />
                     </td>
-                    <td className="py-3 px-2 text-sm text-muted-foreground capitalize">
-                      {metric.source === 'demo' ? 'Demo' : metric.source === 'csv' ? 'CSV' : 'Manual'}
+                    <td className="px-3 py-3 text-sm text-muted-foreground capitalize">
+                      {metric.source === "demo" ? "Demo" : metric.source === "csv" ? "CSV" : "Manual"}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

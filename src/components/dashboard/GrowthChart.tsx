@@ -1,81 +1,66 @@
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { ActivitySquare, TrendingUp } from "lucide-react";
 import { useMetrics } from "@/hooks/useMetrics";
+import { ChartCard } from "@/components/ui/chart-card";
 
 export function GrowthChart() {
-  const { revenueSnapshots } = useMetrics();
+  const { filteredRevenueSnapshots, loading } = useMetrics();
 
-  // Calculate month-over-month growth
-  const sortedSnapshots = [...revenueSnapshots]
+  const sortedSnapshots = [...filteredRevenueSnapshots]
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     .slice(-12);
 
   const chartData = sortedSnapshots.map((snapshot, index) => {
     const prevSnapshot = sortedSnapshots[index - 1];
-    const growth = prevSnapshot?.mrr > 0
-      ? ((snapshot.mrr - prevSnapshot.mrr) / prevSnapshot.mrr) * 100
-      : 0;
-    
+    const growth = prevSnapshot?.mrr ? ((snapshot.mrr - prevSnapshot.mrr) / prevSnapshot.mrr) * 100 : 0;
     return {
-      month: new Date(snapshot.date).toLocaleDateString('en-US', { month: 'short' }),
-      growth: Math.round(growth * 10) / 10,
+      month: new Date(snapshot.date).toLocaleDateString("en-US", { month: "short" }),
+      growth: Number(growth.toFixed(1)),
     };
   });
 
-  if (chartData.length === 0) {
-    return (
-      <div className="metric-card overflow-hidden">
-        <div className="mb-4 md:mb-6">
-          <h3 className="text-base md:text-lg font-semibold text-foreground">Growth Rate</h3>
-          <p className="text-xs md:text-sm text-muted-foreground">Month-over-month revenue growth</p>
-        </div>
-        <div className="h-[200px] sm:h-[250px] md:h-[300px] flex items-center justify-center">
-          <p className="text-muted-foreground">No data to display</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="metric-card overflow-hidden">
-      <div className="mb-4 md:mb-6">
-        <h3 className="text-base md:text-lg font-semibold text-foreground">Growth Rate</h3>
-        <p className="text-xs md:text-sm text-muted-foreground">Month-over-month revenue growth</p>
-      </div>
-      <div className="h-[200px] sm:h-[250px] md:h-[300px] -mx-2 sm:mx-0">
+    <ChartCard
+      title="Revenue Growth Rate"
+      description="Month-over-month percentage change in recurring revenue."
+      icon={TrendingUp}
+      loading={loading}
+      isEmpty={chartData.length === 0}
+      emptyIcon={ActivitySquare}
+      emptyTitle="No growth trend available"
+      emptyDescription="Growth rate appears once at least two revenue snapshots are available."
+    >
+      <div className="h-[280px]">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-            <XAxis 
-              dataKey="month" 
+          <BarChart data={chartData} margin={{ top: 8, right: 8, left: -20, bottom: 4 }}>
+            <XAxis
+              dataKey="month"
               axisLine={false}
               tickLine={false}
-              tick={{ fill: 'hsl(215 20% 55%)', fontSize: 10 }}
-              interval="preserveStartEnd"
+              tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
             />
-            <YAxis 
+            <YAxis
               axisLine={false}
               tickLine={false}
-              tick={{ fill: 'hsl(215 20% 55%)', fontSize: 10 }}
+              tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
               tickFormatter={(value) => `${value}%`}
-              width={40}
+              width={44}
             />
-            <Tooltip 
-              contentStyle={{ 
-                backgroundColor: 'hsl(222 47% 8%)',
-                border: '1px solid hsl(217 33% 17%)',
-                borderRadius: '8px',
-                color: 'hsl(210 40% 98%)',
-                fontSize: '12px'
+            <Tooltip
+              cursor={{ fill: "hsl(var(--muted) / 0.35)" }}
+              contentStyle={{
+                backgroundColor: "hsl(var(--popover))",
+                border: "1px solid hsl(var(--border))",
+                borderRadius: "12px",
+                color: "hsl(var(--popover-foreground))",
+                fontSize: "12px",
               }}
-              formatter={(value: number) => [`${value}%`, 'Growth']}
+              formatter={(value: number) => [`${value}%`, "Growth"]}
             />
-            <Bar
-              dataKey="growth"
-              fill="hsl(217 91% 60%)"
-              radius={[4, 4, 0, 0]}
-            />
+            <Bar dataKey="growth" fill="hsl(var(--chart-2))" radius={[6, 6, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
-    </div>
+    </ChartCard>
   );
 }

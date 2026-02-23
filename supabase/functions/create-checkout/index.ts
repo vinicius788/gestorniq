@@ -1,80 +1,70 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
-
-const logStep = (step: string, details?: any) => {
-  const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
-  console.log(`[CREATE-CHECKOUT] ${step}${detailsStr}`);
-};
-
-class HttpError extends Error {
-  status: number;
-
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
-
-const getRequiredEnv = (key: string) => {
-  const value = Deno.env.get(key);
-  if (!value) throw new HttpError(500, `${key} is not configured`);
-  return value;
-};
-
-const getBaseUrl = (req: Request) => {
-  const configured = Deno.env.get("APP_URL") || Deno.env.get("SITE_URL");
-  if (configured) return configured.replace(/\/$/, "");
-
-  logStep("Missing APP_URL/SITE_URL", { origin: req.headers.get("origin") });
-  throw new HttpError(500, "APP_URL or SITE_URL must be configured");
-};
+import { writeAuditLog } from "../_shared/audit.ts";
+import { getBaseUrl, getCorsHeaders, getRequiredEnv, HttpError, jsonResponse } from "../_shared/http.ts";
+import { createRequestLogger } from "../_shared/logging.ts";
+import { enforceRateLimit } from "../_shared/rate-limit.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: getCorsHeaders(req) });
   }
 
-  try {
-    logStep("Function started");
+  const logger = createRequestLogger("create-checkout", req);
 
+  try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       throw new HttpError(401, "Missing or invalid authorization header");
     }
 
+    const supabaseUrl = getRequiredEnv("SUPABASE_URL");
+
     const supabaseClient = createClient(
-      getRequiredEnv("SUPABASE_URL"),
+      supabaseUrl,
       getRequiredEnv("SUPABASE_ANON_KEY"),
       {
         global: {
           headers: { Authorization: authHeader },
         },
-      }
+      },
+    );
+
+    const supabaseAdmin = createClient(
+      supabaseUrl,
+      getRequiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
+      { auth: { persistSession: false } },
     );
 
     const { data: userData, error: userError } = await supabaseClient.auth.getUser();
     if (userError) throw new HttpError(401, `Authentication error: ${userError.message}`);
 
     const user = userData.user;
-    if (!user?.email) throw new HttpError(401, "User not authenticated");
-    logStep("User authenticated", { userId: user.id });
+    if (!user?.id || !user.email) throw new HttpError(401, "User not authenticated");
+    logger.setUserId(user.id);
+
+    await enforceRateLimit({
+      req,
+      supabaseAdmin,
+      scope: "create-checkout",
+      userId: user.id,
+      rules: [
+        { name: "burst", windowSeconds: 300, maxRequests: 6 },
+        { name: "hourly", windowSeconds: 3600, maxRequests: 24 },
+      ],
+    });
 
     const body = await req.json().catch(() => ({}));
-    const plan = typeof body.plan === "string" ? body.plan.toLowerCase() : "pro";
+    const requestedPlan = typeof body.plan === "string" ? body.plan.toLowerCase() : "standard";
     const companyId = typeof body.company_id === "string" ? body.company_id : "";
 
     if (!companyId) {
       throw new HttpError(400, "company_id is required");
     }
 
-    if (!["starter", "pro"].includes(plan)) {
-      throw new HttpError(400, "plan must be starter or pro");
+    if (!["standard", "standard_annual"].includes(requestedPlan)) {
+      throw new HttpError(400, "plan must be standard or standard_annual");
     }
 
     const { data: company, error: companyError } = await supabaseClient
@@ -88,35 +78,28 @@ serve(async (req) => {
     if (!company) throw new HttpError(403, "Unauthorized company access");
 
     const stripeSecret = getRequiredEnv("STRIPE_SECRET_KEY");
-    const STRIPE_PRICE_STARTER = getRequiredEnv("STRIPE_PRICE_STARTER");
-    const STRIPE_PRICE_PRO = getRequiredEnv("STRIPE_PRICE_PRO");
-    const baseUrl = getBaseUrl(req);
-
-    const priceId = plan === "starter" ? STRIPE_PRICE_STARTER : STRIPE_PRICE_PRO;
-    const planName = plan === "starter" ? "Starter" : "Pro";
-    logStep("Validated request", { userId: user.id, companyId, plan });
+    const stripePriceStandardAnnual = getRequiredEnv("STRIPE_PRICE_STANDARD_ANNUAL");
+    const baseUrl = getBaseUrl(req, logger.info);
 
     const stripe = new Stripe(stripeSecret, {
       apiVersion: "2025-08-27.basil",
     });
 
-    // Check if customer exists
     const customers = await stripe.customers.list({ email: user.email, limit: 1 });
-    let customerId;
+    let customerId: string | undefined;
+
     if (customers.data.length > 0) {
       customerId = customers.data[0].id;
-      logStep("Existing Stripe customer found", { customerId });
-    } else {
-      logStep("No existing Stripe customer, will create new");
+      logger.info("checkout.customer.reused", { customer_id: customerId });
     }
 
-    // Create checkout session with actual price ID
+    const planSlug = "standard";
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       customer_email: customerId ? undefined : user.email,
       line_items: [
         {
-          price: priceId,
+          price: stripePriceStandardAnnual,
           quantity: 1,
         },
       ],
@@ -125,32 +108,41 @@ serve(async (req) => {
         trial_period_days: 3,
         metadata: {
           company_id: companyId,
-          plan: planName,
+          plan: planSlug,
+          billing_cycle: "annual",
           user_id: user.id,
         },
       },
       metadata: {
         company_id: companyId,
-        plan: planName,
+        plan: planSlug,
+        billing_cycle: "annual",
         user_id: user.id,
       },
-      success_url: `${baseUrl}/dashboard?checkout=success`,
+      success_url: `${baseUrl}/dashboard/billing?checkout=success`,
       cancel_url: `${baseUrl}/dashboard/billing?checkout=canceled`,
     });
 
-    logStep("Checkout session created", { sessionId: session.id });
-
-    return new Response(JSON.stringify({ url: session.url }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
+    await writeAuditLog(supabaseAdmin, {
+      action: "billing.checkout_session_created",
+      companyId,
+      actorIp: req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip"),
+      actorUserId: user.id,
+      metadata: {
+        session_id: session.id,
+        plan: planSlug,
+        billing_cycle: "annual",
+      },
     });
+
+    logger.done("checkout.created", { company_id: companyId, session_id: session.id });
+
+    return jsonResponse({ url: session.url }, 200, {}, req);
   } catch (error) {
     const status = error instanceof HttpError ? error.status : 500;
     const message = error instanceof Error ? error.message : "Unknown error";
-    logStep("ERROR", { status, message });
-    return new Response(JSON.stringify({ error: message }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status,
-    });
+    logger.fail("checkout.failed", { status, message });
+
+    return jsonResponse({ error: message }, status, {}, req);
   }
 });

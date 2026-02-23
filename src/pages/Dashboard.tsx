@@ -1,29 +1,44 @@
-import { DollarSign, TrendingUp, BarChart3, Target, Users, UserPlus, Loader2 } from "lucide-react";
-import { MetricCard } from "@/components/dashboard/MetricCard";
+import { useNavigate } from "react-router-dom";
+import { AlertCircle, BarChart3, DollarSign, Target, TrendingUp, Users } from "lucide-react";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { GrowthChart } from "@/components/dashboard/GrowthChart";
 import { UserGrowthChart } from "@/components/dashboard/UserGrowthChart";
 import { MoneyValue } from "@/components/ui/money-value";
-import { FormattedNumber, FormattedPercent } from "@/components/ui/formatted-value";
+import { FormattedPercent } from "@/components/ui/formatted-value";
+import { StatCard } from "@/components/ui/stat-card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { ChartCardSkeleton, StatCardSkeleton } from "@/components/ui/skeletons";
+import { InvestorPackActions } from "@/components/dashboard/InvestorPackActions";
 import { useMetrics } from "@/hooks/useMetrics";
 import { useCompany } from "@/hooks/useCompany";
 import { useApp } from "@/contexts/AppContext";
-import { useLanguage } from "@/contexts/LanguageContext";
 import type { Currency } from "@/lib/format";
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const { company, loading: companyLoading } = useCompany();
-  const { metrics, loading: metricsLoading } = useMetrics();
+  const { metrics, revenueSnapshots, userMetrics, valuationSnapshots, loading: metricsLoading, error } = useMetrics();
   const { isDemoMode } = useApp();
-  const { t } = useLanguage();
 
   const loading = companyLoading || metricsLoading;
-  const currency = (company?.currency || 'USD') as Currency;
+  const currency = (company?.currency || "USD") as Currency;
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="page-section animate-fade-in">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+        </div>
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <ChartCardSkeleton />
+          <ChartCardSkeleton />
+        </div>
+        <ChartCardSkeleton />
       </div>
     );
   }
@@ -31,166 +46,165 @@ export default function Dashboard() {
   const { hasData, hasRevenueData, hasUserData } = metrics;
 
   return (
-    <div className="space-y-4 md:space-y-6 animate-fade-in max-w-full overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="page-section animate-fade-in">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-foreground">{t.dashboard.title}</h1>
-          <p className="text-sm md:text-base text-muted-foreground">
-            {company?.name || 'Your SaaS'} — {t.dashboard.subtitle}
-            {isDemoMode && <span className="ml-2 text-warning">{t.dashboard.demoMode}</span>}
-          </p>
+          <p className="text-sm text-muted-foreground">Workspace</p>
+          <h2 className="text-xl font-semibold text-foreground">{company?.name || "Your SaaS company"}</h2>
+        </div>
+        <div className="flex items-center gap-2">
+          {isDemoMode && <Badge variant="secondary">Demo data</Badge>}
+          <Badge variant={hasData ? "default" : "outline"}>{hasData ? "Active metrics" : "No metrics yet"}</Badge>
         </div>
       </div>
 
-      {/* Empty state */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Unable to load metrics</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
       {!hasData && !isDemoMode && (
-        <div className="metric-card p-8 text-center">
-          <BarChart3 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <h2 className="text-lg font-semibold text-foreground mb-2">{t.dashboard.emptyState.title}</h2>
-          <p className="text-muted-foreground mb-4">
-            {t.dashboard.emptyState.description}
-          </p>
-          <div className="flex gap-3 justify-center">
-            <a href="/dashboard/revenue" className="text-primary hover:underline font-medium">
-              {t.dashboard.emptyState.addRevenue}
-            </a>
-            <a href="/dashboard/user-growth" className="text-primary hover:underline font-medium">
-              {t.dashboard.emptyState.addUsers}
-            </a>
-          </div>
-        </div>
-      )}
-
-      {/* Revenue Metrics Grid */}
-      <div className="grid gap-3 md:gap-4 lg:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard
-          title={t.dashboard.metrics.mrr}
-          value={<MoneyValue value={metrics.mrr} currency={currency} size="3xl" />}
-          change={hasRevenueData ? metrics.mrrGrowth : undefined}
-          icon={DollarSign}
-        />
-        <MetricCard
-          title={t.dashboard.metrics.arr}
-          value={<MoneyValue value={metrics.arr} currency={currency} size="3xl" />}
-          change={hasRevenueData ? metrics.mrrGrowth : undefined}
+        <EmptyState
           icon={BarChart3}
+          title="No data yet"
+          description="Add your first revenue and user snapshots to unlock the dashboard."
+          actionLabel="Add revenue"
+          onAction={() => navigate("/dashboard/revenue?action=add")}
         />
-        <MetricCard
-          title={t.dashboard.metrics.mrrGrowth}
-          value={<FormattedPercent value={metrics.mrrGrowth} className="text-2xl lg:text-3xl font-bold" />}
-          change={hasRevenueData ? metrics.mrrGrowth : undefined}
-          changeLabel={`${t.dashboard.metrics.vsPrevious}`}
-          icon={TrendingUp}
-        />
-        <MetricCard
-          title={t.dashboard.metrics.valuation}
-          value={<MoneyValue value={metrics.valuation} currency={currency} abbreviate size="3xl" />}
-          change={hasRevenueData ? metrics.mrrGrowth : undefined}
-          changeLabel={metrics.valuationMultiple ? `${t.dashboard.metrics.atMultiple} ${metrics.valuationMultiple}x ARR` : undefined}
-          icon={Target}
-        />
-      </div>
-
-      {/* User Growth Metrics */}
-      <div className="grid gap-3 md:gap-4 lg:gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
-        <div className="metric-card overflow-hidden">
-          <div className="flex items-center gap-2 mb-2">
-            <Users className="h-4 w-4 shrink-0 text-chart-2/70" />
-            <h3 className="text-sm font-medium text-muted-foreground truncate">{t.dashboard.metrics.totalUsers}</h3>
-          </div>
-          <p className="text-lg sm:text-xl md:text-2xl font-bold text-foreground whitespace-nowrap tabular-nums">
-            <FormattedNumber value={metrics.totalUsers} />
-          </p>
-          {hasUserData && metrics.userGrowth !== null ? (
-            <p className="mt-1 text-sm tabular-nums">
-              <FormattedPercent value={metrics.userGrowth} showSign colorize /> {t.dashboard.metrics.mom}
-            </p>
-          ) : (
-            <p className="mt-1 text-sm text-muted-foreground">—</p>
-          )}
-        </div>
-        <div className="metric-card overflow-hidden">
-          <div className="flex items-center gap-2 mb-2">
-            <UserPlus className="h-4 w-4 shrink-0 text-chart-2/70" />
-            <h3 className="text-sm font-medium text-muted-foreground truncate">{t.dashboard.metrics.newUsers}</h3>
-          </div>
-          <p className="text-lg sm:text-xl md:text-2xl font-bold text-foreground whitespace-nowrap tabular-nums">
-            <FormattedNumber value={metrics.newUsers} />
-          </p>
-          {hasUserData && metrics.userGrowth !== null ? (
-            <p className="mt-1 text-sm text-success tabular-nums">
-              <FormattedPercent value={metrics.userGrowth} showSign /> {t.dashboard.metrics.vsPrevious}
-            </p>
-          ) : (
-            <p className="mt-1 text-sm text-muted-foreground">—</p>
-          )}
-        </div>
-        <div className="metric-card overflow-hidden sm:col-span-2 md:col-span-1">
-          <div className="flex items-center gap-2 mb-2">
-            <TrendingUp className="h-4 w-4 shrink-0 text-chart-2/70" />
-            <h3 className="text-sm font-medium text-muted-foreground truncate">{t.dashboard.metrics.growthRate}</h3>
-          </div>
-          <p className="text-lg sm:text-xl md:text-2xl font-bold text-foreground whitespace-nowrap tabular-nums">
-            <FormattedPercent value={metrics.userGrowth} />
-          </p>
-          <p className="mt-1 text-sm text-muted-foreground">{t.dashboard.metrics.mom}</p>
-        </div>
-      </div>
-
-      {/* Charts */}
-      {hasData && (
-        <div className="grid gap-4 md:gap-6 grid-cols-1 lg:grid-cols-2">
-          <RevenueChart />
-          <GrowthChart />
-        </div>
       )}
 
-      {/* User Growth Chart */}
-      {hasData && <UserGrowthChart />}
-
-      {/* Quick Stats */}
-      <div className="grid gap-3 md:gap-4 lg:gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
-        <div className="metric-card overflow-hidden">
-          <h3 className="text-sm font-medium text-muted-foreground truncate">{t.dashboard.metrics.activeCustomers}</h3>
-          <p className="mt-2 text-lg sm:text-xl md:text-2xl font-bold text-foreground whitespace-nowrap tabular-nums">
-            <FormattedNumber value={metrics.activeUsers} />
-          </p>
-          {hasUserData && metrics.newUsers !== null ? (
-            <p className="mt-1 text-sm text-success tabular-nums">
-              +<FormattedNumber value={metrics.newUsers} /> {t.dashboard.metrics.thisMonth}
+      <div className="metric-card">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-foreground">Investor Pack</p>
+            <p className="text-sm text-muted-foreground">
+              Export a board-ready summary with your metrics, forecasts, and latest snapshots.
             </p>
-          ) : (
-            <p className="mt-1 text-sm text-muted-foreground">—</p>
-          )}
-        </div>
-        <div className="metric-card overflow-hidden">
-          <h3 className="text-sm font-medium text-muted-foreground truncate">{t.dashboard.metrics.churnRate}</h3>
-          <p className="mt-2 text-lg sm:text-xl md:text-2xl font-bold text-foreground whitespace-nowrap tabular-nums">
-            <FormattedPercent value={metrics.churnRate} />
-          </p>
-          {hasUserData && metrics.churnRate !== null ? (
-            <p className={`mt-1 text-sm ${metrics.churnRate < 5 ? 'text-success' : 'text-destructive'}`}>
-              {metrics.churnRate < 5 ? t.common.healthy : t.common.attention}
-            </p>
-          ) : (
-            <p className="mt-1 text-sm text-muted-foreground">—</p>
-          )}
-        </div>
-        <div className="metric-card overflow-hidden sm:col-span-2 md:col-span-1">
-          <h3 className="text-sm font-medium text-muted-foreground truncate">{t.dashboard.metrics.arpu}</h3>
-          <p className="mt-2 text-lg sm:text-xl md:text-2xl font-bold text-foreground whitespace-nowrap tabular-nums">
-            <MoneyValue value={metrics.arpu} currency={currency} size="2xl" />
-          </p>
-          {hasData && metrics.arpu !== null ? (
-            <p className="mt-1 text-sm text-muted-foreground whitespace-nowrap">
-              {t.dashboard.metrics.estimatedLtv}: <MoneyValue value={metrics.arpu * 24} currency={currency} size="sm" />
-            </p>
-          ) : (
-            <p className="mt-1 text-sm text-muted-foreground">—</p>
-          )}
+          </div>
+          <InvestorPackActions
+            compact
+            companyName={company?.name || "My SaaS Company"}
+            currency={currency}
+            metrics={metrics}
+            revenueSnapshots={revenueSnapshots}
+            userMetrics={userMetrics}
+            valuationSnapshots={valuationSnapshots}
+          />
         </div>
       </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="MRR"
+          value={<MoneyValue value={metrics.mrr} currency={currency} size="2xl" />}
+          delta={hasRevenueData ? metrics.mrrGrowth : null}
+          deltaLabel="vs previous period"
+          icon={DollarSign}
+          empty={!hasRevenueData}
+          emptyText="Add revenue snapshots"
+        />
+        <StatCard
+          label="ARR"
+          value={<MoneyValue value={metrics.arr} currency={currency} size="2xl" />}
+          delta={hasRevenueData ? metrics.mrrGrowth : null}
+          deltaLabel="annualized from MRR"
+          icon={BarChart3}
+          empty={!hasRevenueData}
+          emptyText="Add revenue snapshots"
+        />
+        <StatCard
+          label="Net New MRR"
+          value={<MoneyValue value={metrics.netNewMrr} currency={currency} size="2xl" />}
+          delta={hasRevenueData ? metrics.mrrGrowth : null}
+          deltaLabel="new + expansion - churn"
+          icon={TrendingUp}
+          empty={!hasRevenueData}
+          emptyText="Add revenue movement data"
+        />
+        <StatCard
+          label="Valuation"
+          value={<MoneyValue value={metrics.valuation} currency={currency} abbreviate size="2xl" />}
+          delta={hasRevenueData ? metrics.mrrGrowth : null}
+          deltaLabel={metrics.valuationMultiple ? `${metrics.valuationMultiple}x ARR` : undefined}
+          icon={Target}
+          empty={!hasRevenueData}
+          emptyText="Requires ARR data"
+        />
+      </div>
+
+      <div className="metric-card">
+        <div className="mb-4">
+          <p className="text-sm font-semibold text-foreground">Revenue Forecast</p>
+          <p className="text-sm text-muted-foreground">
+            3, 6, and 12-month projections based on your latest growth trend.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {[
+            { label: "3 months", forecast: metrics.forecast3m },
+            { label: "6 months", forecast: metrics.forecast6m },
+            { label: "12 months", forecast: metrics.forecast12m },
+          ].map((item) => (
+            <div key={item.label} className="rounded-xl border border-border bg-muted/30 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{item.label}</p>
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs text-muted-foreground">Projected MRR</span>
+                  <MoneyValue value={item.forecast?.mrr ?? null} currency={currency} size="sm" />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs text-muted-foreground">Projected ARR</span>
+                  <MoneyValue value={item.forecast?.arr ?? null} currency={currency} size="sm" />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs text-muted-foreground">Projected valuation</span>
+                  <MoneyValue value={item.forecast?.valuation ?? null} currency={currency} abbreviate size="sm" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <RevenueChart />
+        <GrowthChart />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <StatCard
+          label="Total Users"
+          value={metrics.totalUsers?.toLocaleString("en-US")}
+          delta={hasUserData ? metrics.userGrowth : null}
+          deltaLabel="month over month"
+          icon={Users}
+          empty={!hasUserData}
+          emptyText="Add user snapshots"
+        />
+        <StatCard
+          label="Churn Rate"
+          value={<FormattedPercent value={metrics.churnRate} className="text-2xl font-bold" />}
+          delta={hasUserData ? -Math.abs(metrics.churnRate ?? 0) : null}
+          deltaLabel="lower is better"
+          icon={TrendingUp}
+          empty={!hasUserData}
+          emptyText="Needs user activity data"
+        />
+        <StatCard
+          label="ARPU"
+          value={<MoneyValue value={metrics.arpu} currency={currency} size="2xl" />}
+          delta={null}
+          deltaLabel="average revenue per user"
+          icon={DollarSign}
+          empty={!hasRevenueData || !hasUserData}
+          emptyText="Requires revenue + users"
+        />
+      </div>
+
+      <UserGrowthChart />
     </div>
   );
 }

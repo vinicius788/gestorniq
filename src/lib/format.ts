@@ -171,19 +171,19 @@ export function formatCurrencySimple(
  */
 export function getGrowthLabel(value: number | null): {
   label: string;
-  emoji: string;
+  symbol: string;
   variant: 'success' | 'warning' | 'neutral' | 'destructive';
 } {
   if (value === null || value === undefined) {
-    return { label: 'No data', emoji: '—', variant: 'neutral' };
+    return { label: 'No data', symbol: '—', variant: 'neutral' };
   }
   
-  if (value > 20) return { label: 'Excellent', emoji: '🔥', variant: 'success' };
-  if (value > 10) return { label: 'Strong', emoji: '🚀', variant: 'success' };
-  if (value > 5) return { label: 'Healthy', emoji: '✅', variant: 'success' };
-  if (value > 0) return { label: 'Growing', emoji: '📈', variant: 'warning' };
-  if (value === 0) return { label: 'Stable', emoji: '➡️', variant: 'neutral' };
-  return { label: 'Declining', emoji: '⚠️', variant: 'destructive' };
+  if (value > 20) return { label: 'Excellent', symbol: '+++', variant: 'success' };
+  if (value > 10) return { label: 'Strong', symbol: '++', variant: 'success' };
+  if (value > 5) return { label: 'Healthy', symbol: '+', variant: 'success' };
+  if (value > 0) return { label: 'Growing', symbol: '~', variant: 'warning' };
+  if (value === 0) return { label: 'Stable', symbol: '=', variant: 'neutral' };
+  return { label: 'Declining', symbol: '!', variant: 'destructive' };
 }
 
 export function getChurnLabel(value: number | null): {

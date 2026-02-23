@@ -4,14 +4,81 @@ import { useCompany } from './useCompany';
 import { useApp } from '@/contexts/AppContext';
 import { 
   calculateMetrics, 
+  filterByTimeframe,
   type RevenueSnapshot, 
   type UserMetric, 
   type ValuationSnapshot,
   type CalculatedMetrics 
 } from '@/lib/calculations';
 import { generateDemoData } from '@/lib/demo-data';
+import {
+  normalizeRevenueSnapshotInput,
+  normalizeUserMetricInput,
+  type RevenueSnapshotInput,
+  type UserMetricInput,
+} from '@/lib/metric-input';
+import type { Timeframe } from '@/lib/calculations';
 
 export type { RevenueSnapshot, UserMetric, ValuationSnapshot, CalculatedMetrics };
+
+const SNAPSHOT_PAGE_SIZE = 200;
+const SNAPSHOT_MAX_ROWS = 1200;
+
+function getSnapshotCutoffDate(timeframe: Timeframe): string | null {
+  if (timeframe === 'all') {
+    return null;
+  }
+
+  const daysByTimeframe: Record<Exclude<Timeframe, 'all'>, number> = {
+    '30d': 45,
+    '90d': 120,
+    '12m': 400,
+  };
+
+  const now = new Date();
+  now.setDate(now.getDate() - daysByTimeframe[timeframe]);
+  return now.toISOString().split('T')[0];
+}
+
+async function fetchPagedSnapshots<T>({
+  table,
+  companyId,
+  cutoffDate,
+}: {
+  table: 'revenue_snapshots' | 'user_metrics' | 'valuation_snapshots';
+  companyId: string;
+  cutoffDate: string | null;
+}): Promise<T[]> {
+  const allRows: T[] = [];
+  let offset = 0;
+
+  while (offset < SNAPSHOT_MAX_ROWS) {
+    let query = supabase
+      .from(table)
+      .select('*')
+      .eq('company_id', companyId)
+      .order('date', { ascending: false })
+      .range(offset, offset + SNAPSHOT_PAGE_SIZE - 1);
+
+    if (cutoffDate) {
+      query = query.gte('date', cutoffDate);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const page = (data || []) as T[];
+    allRows.push(...page);
+
+    if (page.length < SNAPSHOT_PAGE_SIZE) {
+      break;
+    }
+
+    offset += SNAPSHOT_PAGE_SIZE;
+  }
+
+  return allRows.slice(0, SNAPSHOT_MAX_ROWS);
+}
 
 export function useMetrics() {
   const { company } = useCompany();
@@ -24,7 +91,7 @@ export function useMetrics() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchMetrics = useCallback(async () => {
-    // Se está em modo demo, usar dados gerados
+    // Use generated data while demo mode is enabled.
     if (isDemoMode) {
       const demoData = generateDemoData();
       setRevenueSnapshots(demoData.revenueSnapshots);
@@ -46,44 +113,42 @@ export function useMetrics() {
     try {
       setLoading(true);
 
-      const [revenueRes, userRes, valuationRes] = await Promise.all([
-        supabase
-          .from('revenue_snapshots')
-          .select('*')
-          .eq('company_id', company.id)
-          .order('date', { ascending: false }),
-        supabase
-          .from('user_metrics')
-          .select('*')
-          .eq('company_id', company.id)
-          .order('date', { ascending: false }),
-        supabase
-          .from('valuation_snapshots')
-          .select('*')
-          .eq('company_id', company.id)
-          .order('date', { ascending: false }),
+      const cutoffDate = getSnapshotCutoffDate(timeframe);
+
+      const [revenueData, userData, valuationData] = await Promise.all([
+        fetchPagedSnapshots<RevenueSnapshot>({
+          table: 'revenue_snapshots',
+          companyId: company.id,
+          cutoffDate,
+        }),
+        fetchPagedSnapshots<UserMetric>({
+          table: 'user_metrics',
+          companyId: company.id,
+          cutoffDate,
+        }),
+        fetchPagedSnapshots<ValuationSnapshot>({
+          table: 'valuation_snapshots',
+          companyId: company.id,
+          cutoffDate,
+        }),
       ]);
 
-      if (revenueRes.error) throw revenueRes.error;
-      if (userRes.error) throw userRes.error;
-      if (valuationRes.error) throw valuationRes.error;
-
-      setRevenueSnapshots(revenueRes.data || []);
-      setUserMetrics(userRes.data || []);
-      setValuationSnapshots(valuationRes.data || []);
+      setRevenueSnapshots(revenueData);
+      setUserMetrics(userData);
+      setValuationSnapshots(valuationData);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao carregar métricas');
+      setError(err instanceof Error ? err.message : 'Failed to load metrics');
     } finally {
       setLoading(false);
     }
-  }, [company, isDemoMode]);
+  }, [company, isDemoMode, timeframe]);
 
   useEffect(() => {
     fetchMetrics();
   }, [fetchMetrics]);
 
-  // Calcular métricas usando o módulo centralizado
+  // Compute dashboard metrics through the centralized calculation module.
   const metrics: CalculatedMetrics = calculateMetrics(
     revenueSnapshots,
     userMetrics,
@@ -91,62 +156,96 @@ export function useMetrics() {
     timeframe
   );
 
-  // Adicionar snapshot de receita
-  const addRevenueSnapshot = async (data: {
-    date: string;
-    mrr: number;
-    new_mrr: number;
-    expansion_mrr: number;
-    churned_mrr: number;
-    source: string;
-  }) => {
+  const filteredRevenueSnapshots = filterByTimeframe(revenueSnapshots, timeframe);
+  const filteredUserMetrics = filterByTimeframe(userMetrics, timeframe);
+  const filteredValuationSnapshots = filterByTimeframe(valuationSnapshots, timeframe);
+
+  // Add revenue snapshot.
+  const addRevenueSnapshot = async (data: RevenueSnapshotInput) => {
     if (isDemoMode) {
-      throw new Error('Não é possível adicionar dados em modo demo');
+      throw new Error('Cannot add data in demo mode');
     }
-    if (!company) throw new Error('Nenhuma empresa selecionada');
+    if (!company) throw new Error('No company selected');
+
+    const payload = normalizeRevenueSnapshotInput(data);
 
     const { error } = await supabase
       .from('revenue_snapshots')
       .upsert({
         company_id: company.id,
-        ...data,
+        ...payload,
       }, { onConflict: 'company_id,date' });
 
     if (error) throw error;
     await fetchMetrics();
   };
 
-  // Adicionar métricas de usuário
-  const addUserMetrics = async (data: {
-    date: string;
-    total_users: number;
-    new_users: number;
-    active_users: number;
-    churned_users: number;
-    source: string;
-  }) => {
+  const addRevenueSnapshots = async (entries: RevenueSnapshotInput[]) => {
     if (isDemoMode) {
-      throw new Error('Não é possível adicionar dados em modo demo');
+      throw new Error('Cannot add data in demo mode');
     }
-    if (!company) throw new Error('Nenhuma empresa selecionada');
+    if (!company) throw new Error('No company selected');
+    if (entries.length === 0) return;
+
+    const payload = entries.map((entry) => ({
+      company_id: company.id,
+      ...normalizeRevenueSnapshotInput(entry),
+    }));
+
+    const { error } = await supabase
+      .from('revenue_snapshots')
+      .upsert(payload, { onConflict: 'company_id,date' });
+
+    if (error) throw error;
+    await fetchMetrics();
+  };
+
+  // Add user metrics snapshot.
+  const addUserMetrics = async (data: UserMetricInput) => {
+    if (isDemoMode) {
+      throw new Error('Cannot add data in demo mode');
+    }
+    if (!company) throw new Error('No company selected');
+
+    const payload = normalizeUserMetricInput(data);
 
     const { error } = await supabase
       .from('user_metrics')
       .upsert({
         company_id: company.id,
-        ...data,
+        ...payload,
       }, { onConflict: 'company_id,date' });
 
     if (error) throw error;
     await fetchMetrics();
   };
 
-  // Calcular e salvar valuation
+  const addUserMetricsBatch = async (entries: UserMetricInput[]) => {
+    if (isDemoMode) {
+      throw new Error('Cannot add data in demo mode');
+    }
+    if (!company) throw new Error('No company selected');
+    if (entries.length === 0) return;
+
+    const payload = entries.map((entry) => ({
+      company_id: company.id,
+      ...normalizeUserMetricInput(entry),
+    }));
+
+    const { error } = await supabase
+      .from('user_metrics')
+      .upsert(payload, { onConflict: 'company_id,date' });
+
+    if (error) throw error;
+    await fetchMetrics();
+  };
+
+  // Calculate and save valuation snapshot.
   const calculateValuation = async (multiple?: number) => {
     if (isDemoMode) {
-      throw new Error('Não é possível salvar em modo demo');
+      throw new Error('Cannot save in demo mode');
     }
-    if (!company) throw new Error('Nenhuma empresa selecionada');
+    if (!company) throw new Error('No company selected');
 
     const valuationMultiple = multiple ?? metrics.suggestedMultiple;
     const arr = metrics.arr ?? 0;
@@ -175,7 +274,10 @@ export function useMetrics() {
     loading,
     error,
     metrics,
-    // Manter compatibilidade com código antigo
+    filteredRevenueSnapshots,
+    filteredUserMetrics,
+    filteredValuationSnapshots,
+    // Keep compatibility with legacy consumers.
     dashboardMetrics: {
       mrr: metrics.mrr ?? 0,
       arr: metrics.arr ?? 0,
@@ -190,7 +292,9 @@ export function useMetrics() {
       valuationMultiple: metrics.valuationMultiple ?? 10,
     },
     addRevenueSnapshot,
+    addRevenueSnapshots,
     addUserMetrics,
+    addUserMetricsBatch,
     calculateValuation,
     refetch: fetchMetrics,
   };

@@ -1,6 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
 import { 
-  Zap, 
   BarChart3, 
   TrendingUp, 
   Shield, 
@@ -16,10 +15,13 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { BrandLogo } from "@/components/brand/BrandLogo";
+import { ProductExperiencePreview } from "@/components/landing/ProductExperiencePreview";
 
 export default function Landing() {
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const currentYear = new Date().getFullYear();
 
   const handleViewDemo = () => {
     // Persist intent so authenticated and non-authenticated flows behave consistently.
@@ -69,23 +71,26 @@ export default function Landing() {
       role: "Founder, DataSync",
     },
     {
-      quote: "Clean interface, connects to Stripe in seconds. Exactly what every SaaS founder needs.",
+      quote: "Clean interface, fast setup with demo, manual, or CSV data. Exactly what every SaaS founder needs.",
       author: "Emma Williams",
       role: "CTO, CloudBase",
     },
   ];
+
+  const conversionSignals = [
+    { value: '10 min', label: 'to set up and see first insights' },
+    { value: '3 days', label: 'of trial to validate value before paying' },
+    { value: '1 dashboard', label: 'with a story ready for board and investors' },
+  ];
+
+  const launchMessage = "Launch offer: start in guided mode and get your investor dashboard live today.";
 
   return (
     <div className="min-h-screen bg-background">
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-              <Zap className="h-4 w-4 text-primary-foreground" />
-            </div>
-            <span className="text-lg font-semibold text-foreground">GestorNiq</span>
-          </div>
+          <BrandLogo size="sm" theme="dark" />
           <div className="hidden md:flex items-center gap-8">
             <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">{t.nav.features}</a>
             <a href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors">How it works</a>
@@ -116,6 +121,10 @@ export default function Landing() {
               <Sparkles className="h-4 w-4 text-primary" />
               <span className="text-sm font-medium text-primary">{t.landing.badge}</span>
             </div>
+
+            <div className="mb-5 rounded-full border border-border bg-card/60 px-4 py-2 text-xs text-muted-foreground inline-flex items-center">
+              {launchMessage}
+            </div>
             
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-6 text-balance leading-tight">
               {t.landing.headline}
@@ -140,6 +149,15 @@ export default function Landing() {
             <p className="text-sm text-muted-foreground mt-4">
               {t.landing.cta.disclaimer}
             </p>
+
+            <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-3xl mx-auto">
+              {conversionSignals.map((signal) => (
+                <div key={signal.label} className="rounded-xl border border-border bg-card/50 px-4 py-3 text-left">
+                  <p className="text-lg font-bold text-foreground">{signal.value}</p>
+                  <p className="text-xs text-muted-foreground">{signal.label}</p>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Dashboard Preview */}
@@ -234,60 +252,13 @@ export default function Landing() {
             <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
               {t.landing.preview.title}
             </h2>
+            <p className="text-muted-foreground max-w-2xl mx-auto">
+              Switch between dashboard surfaces and interact with the same controls users will use inside the app.
+            </p>
           </div>
 
-          <div className="grid gap-8 md:grid-cols-2 max-w-5xl mx-auto">
-            {/* Dashboard Preview */}
-            <div className="metric-card p-0 overflow-hidden">
-              <div className="px-4 py-3 border-b border-border bg-muted/30">
-                <span className="text-sm font-medium text-foreground">{t.landing.preview.dashboard}</span>
-              </div>
-              <div className="p-4 space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3 rounded-lg bg-muted/50 border border-border/50">
-                    <p className="text-xs text-muted-foreground">MRR</p>
-                    <p className="text-lg font-bold text-foreground whitespace-nowrap tabular-nums">$45,200</p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-muted/50 border border-border/50">
-                    <p className="text-xs text-muted-foreground">Growth</p>
-                    <p className="text-lg font-bold text-success whitespace-nowrap tabular-nums">+12.5%</p>
-                  </div>
-                </div>
-                <div className="h-32 bg-muted/30 rounded-lg flex items-end p-2 gap-1">
-                  {[40, 55, 45, 60, 75, 65, 80, 90, 85, 95, 88, 100].map((h, i) => (
-                    <div key={i} className="flex-1 bg-primary/60 rounded-t" style={{ height: `${h}%` }} />
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Valuation Preview */}
-            <div className="metric-card p-0 overflow-hidden">
-              <div className="px-4 py-3 border-b border-border bg-muted/30">
-                <span className="text-sm font-medium text-foreground">{t.landing.preview.valuation}</span>
-              </div>
-              <div className="p-4 space-y-3">
-                <div className="p-4 rounded-lg bg-primary/10 border border-primary/20 text-center">
-                  <p className="text-xs text-muted-foreground">Current Valuation</p>
-                  <p className="text-2xl font-bold text-foreground whitespace-nowrap tabular-nums">$5.4M</p>
-                  <p className="text-xs text-primary tabular-nums">12x ARR</p>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="p-2 rounded-lg bg-muted/50 text-center">
-                    <p className="text-xs text-muted-foreground">3 months</p>
-                    <p className="text-sm font-bold text-foreground whitespace-nowrap tabular-nums">$52K</p>
-                  </div>
-                  <div className="p-2 rounded-lg bg-muted/50 text-center">
-                    <p className="text-xs text-muted-foreground">6 months</p>
-                    <p className="text-sm font-bold text-foreground whitespace-nowrap tabular-nums">$61K</p>
-                  </div>
-                  <div className="p-2 rounded-lg bg-muted/50 text-center">
-                    <p className="text-xs text-muted-foreground">12 months</p>
-                    <p className="text-sm font-bold text-foreground whitespace-nowrap tabular-nums">$82K</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div className="max-w-6xl mx-auto">
+            <ProductExperiencePreview />
           </div>
         </div>
       </section>
@@ -304,45 +275,22 @@ export default function Landing() {
             </p>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-3 max-w-5xl mx-auto">
-            {/* Starter */}
-            <div className="metric-card">
-              <div className="mb-6">
-                <h3 className="text-lg font-semibold text-foreground">{t.pricing.starter.name}</h3>
-                <p className="text-sm text-muted-foreground">{t.pricing.starter.description}</p>
-              </div>
-              <div className="mb-6">
-                <span className="text-4xl font-bold text-foreground">{t.pricing.starter.price}</span>
-                <span className="text-muted-foreground">{t.pricing.perMonth}</span>
-              </div>
-              <ul className="space-y-3 mb-6">
-                {t.pricing.starter.features.map((feature) => (
-                  <li key={feature} className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Check className="h-4 w-4 text-primary" />
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-              <Button variant="outline" className="w-full" asChild>
-                <Link to="/auth">{t.pricing.starter.cta}</Link>
-              </Button>
-            </div>
-
-            {/* Pro */}
+          <div className="max-w-xl mx-auto">
             <div className="metric-card relative border-primary ring-1 ring-primary">
               <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-primary text-primary-foreground text-xs font-medium rounded-full">
-                {t.pricing.pro.popular}
+                {t.pricing.standard.badge}
               </div>
               <div className="mb-6">
-                <h3 className="text-lg font-semibold text-foreground">{t.pricing.pro.name}</h3>
-                <p className="text-sm text-muted-foreground">{t.pricing.pro.description}</p>
+                <h3 className="text-lg font-semibold text-foreground">{t.pricing.standard.name}</h3>
+                <p className="text-sm text-muted-foreground">{t.pricing.standard.description}</p>
               </div>
               <div className="mb-6">
-                <span className="text-4xl font-bold text-foreground">{t.pricing.pro.price}</span>
+                <span className="text-4xl font-bold text-foreground">{t.pricing.standard.price}</span>
                 <span className="text-muted-foreground">{t.pricing.perMonth}</span>
+                <p className="text-sm text-muted-foreground mt-2">{t.pricing.billedAnnually}: {t.pricing.standard.annualPrice}</p>
               </div>
               <ul className="space-y-3 mb-6">
-                {t.pricing.pro.features.map((feature) => (
+                {t.pricing.standard.features.map((feature) => (
                   <li key={feature} className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Check className="h-4 w-4 text-primary" />
                     {feature}
@@ -350,29 +298,7 @@ export default function Landing() {
                 ))}
               </ul>
               <Button variant="hero" className="w-full" asChild>
-                <Link to="/auth">{t.pricing.pro.cta}</Link>
-              </Button>
-            </div>
-
-            {/* Enterprise */}
-            <div className="metric-card">
-              <div className="mb-6">
-                <h3 className="text-lg font-semibold text-foreground">{t.pricing.enterprise.name}</h3>
-                <p className="text-sm text-muted-foreground">{t.pricing.enterprise.description}</p>
-              </div>
-              <div className="mb-6">
-                <span className="text-4xl font-bold text-foreground">{t.pricing.enterprise.price}</span>
-              </div>
-              <ul className="space-y-3 mb-6">
-                {t.pricing.enterprise.features.map((feature) => (
-                  <li key={feature} className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Check className="h-4 w-4 text-primary" />
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-              <Button variant="outline" className="w-full" asChild>
-                <Link to="/auth">{t.pricing.enterprise.cta}</Link>
+                <Link to="/auth">{t.pricing.standard.cta}</Link>
               </Button>
             </div>
           </div>
@@ -457,19 +383,21 @@ export default function Landing() {
       <footer className="py-12 border-t border-border/50">
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                <Zap className="h-4 w-4 text-primary-foreground" />
-              </div>
-              <span className="text-lg font-semibold text-foreground">GestorNiq</span>
-            </div>
+            <BrandLogo size="sm" theme="dark" />
             <div className="flex items-center gap-6">
               <Link to="/terms" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Terms</Link>
               <Link to="/privacy" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Privacy</Link>
-              <Link to="/support" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Support</Link>
+              <a
+                href="https://x.com/gestoniq22509"
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Support
+              </a>
             </div>
             <p className="text-sm text-muted-foreground">
-              {t.footer.copyright}
+              © {currentYear} GestorNiq. All rights reserved.
             </p>
           </div>
         </div>

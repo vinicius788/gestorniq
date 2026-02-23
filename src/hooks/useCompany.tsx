@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
+import { useState, useEffect, useCallback, createContext, useContext, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
@@ -21,6 +21,7 @@ interface CompanyContextType {
   loading: boolean;
   error: string | null;
   updateCompany: (updates: Partial<Company>) => Promise<void>;
+  ensureCompany: () => Promise<Company | null>;
   refetch: () => Promise<void>;
 }
 
@@ -32,7 +33,16 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchCompany = async () => {
+  const ensureCompany = useCallback(async () => {
+    if (!user) return null;
+
+    const { data, error: ensureError } = await supabase.rpc('ensure_company_for_current_user');
+    if (ensureError) throw ensureError;
+
+    return (data as Company | null) ?? null;
+  }, [user]);
+
+  const fetchCompany = useCallback(async () => {
     if (!user) {
       setCompany(null);
       setLoading(false);
@@ -45,24 +55,34 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
         .from('companies')
         .select('*')
         .eq('user_id', user.id)
+        .order('created_at', { ascending: true })
+        .limit(1)
         .maybeSingle();
 
       if (fetchError) throw fetchError;
-      setCompany(data);
+      if (data) {
+        setCompany(data);
+        setError(null);
+        return;
+      }
+
+      const ensuredCompany = await ensureCompany();
+      setCompany(ensuredCompany);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch company');
+      setCompany(null);
     } finally {
       setLoading(false);
     }
-  };
+  }, [ensureCompany, user]);
 
   useEffect(() => {
     fetchCompany();
-  }, [user]);
+  }, [fetchCompany]);
 
   const updateCompany = async (updates: Partial<Company>) => {
-    if (!company) return;
+    if (!company) throw new Error('Company not found');
 
     const { error: updateError } = await supabase
       .from('companies')
@@ -74,7 +94,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <CompanyContext.Provider value={{ company, loading, error, updateCompany, refetch: fetchCompany }}>
+    <CompanyContext.Provider value={{ company, loading, error, updateCompany, ensureCompany, refetch: fetchCompany }}>
       {children}
     </CompanyContext.Provider>
   );

@@ -4,15 +4,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/useAuth';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { Mail, Lock, User, ArrowRight, Loader2, Zap, ArrowLeft } from 'lucide-react';
+import { Mail, Lock, User, ArrowRight, Loader2, ArrowLeft, ShieldCheck, TrendingUp, Clock3 } from 'lucide-react';
+import { BrandLogo } from "@/components/brand/BrandLogo";
+import { AUTH_CONFIG } from '@/lib/auth-config';
 
 export default function Auth() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user, signIn, signUp, signInWithGoogle, loading: authLoading } = useAuth();
+  const { user, signIn, signUp, signInWithGoogle, resendConfirmationEmail, requestPasswordReset, loading: authLoading } = useAuth();
   const { t } = useLanguage();
   const [mode, setMode] = useState<'login' | 'signup' | 'reset'>('login');
   const [loading, setLoading] = useState(false);
@@ -21,7 +22,21 @@ export default function Auth() {
   const [fullName, setFullName] = useState('');
   const [errors, setErrors] = useState<{ email?: string; password?: string; fullName?: string }>({});
   const isDemoRequested = searchParams.get('demo') === '1';
+  const oauthError = searchParams.get('auth_error');
+  const clerkOnlyMode = AUTH_CONFIG.clerkOnlyMode;
   const postAuthPath = isDemoRequested ? '/dashboard?demo=1' : '/dashboard';
+
+  const pitch = {
+    label: 'Fundraising-ready in minutes',
+    title: 'Sign in and turn scattered metrics into an investor story.',
+    subtitle: 'Go from spreadsheet chaos to a board-ready dashboard for fundraising and weekly decisions.',
+    bullets: [
+      '3/6/12-month forecast to show business direction',
+      'Valuation and equity pricing based on real growth',
+      'MRR breakdown in the format investors expect',
+    ],
+    trust: ['No card for trial', 'One-click cancellation', 'Secure data access'],
+  };
 
   const persistDemoFlags = useCallback(() => {
     if (!isDemoRequested) return;
@@ -36,15 +51,26 @@ export default function Auth() {
     }
   }, [user, authLoading, navigate, postAuthPath, persistDemoFlags]);
 
-  const validateForm = () => {
+  useEffect(() => {
+    if (!oauthError) return;
+
+    toast.error(oauthError);
+
+    const params = new URLSearchParams(searchParams);
+    params.delete('auth_error');
+    const nextSearch = params.toString();
+    navigate(nextSearch ? `/auth?${nextSearch}` : '/auth', { replace: true });
+  }, [oauthError, navigate, searchParams]);
+
+  const validateForm = (candidateEmail: string, candidatePassword: string) => {
     const newErrors: typeof errors = {};
     const emailSchema = z.string().email(t.auth.invalidEmail);
-    const emailResult = emailSchema.safeParse(email);
+    const emailResult = emailSchema.safeParse(candidateEmail);
     if (!emailResult.success) newErrors.email = emailResult.error.errors[0].message;
 
     if (mode !== 'reset') {
       const passwordSchema = z.string().min(6, t.auth.invalidPassword);
-      const passwordResult = passwordSchema.safeParse(password);
+      const passwordResult = passwordSchema.safeParse(candidatePassword);
       if (!passwordResult.success) newErrors.password = passwordResult.error.errors[0].message;
     }
 
@@ -58,26 +84,52 @@ export default function Auth() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateForm()) return;
+    const normalizedEmail = email.trim().toLowerCase();
+    const passwordValue = password;
+    if (!validateForm(normalizedEmail, passwordValue)) return;
 
     setLoading(true);
     try {
       if (mode === 'reset') {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/auth`,
-        });
+        const { error } = await requestPasswordReset(normalizedEmail, '/auth');
         if (error) {
           toast.error(error.message);
           return;
         }
-        toast.success('Password reset email sent! Check your inbox.');
+        toast.success('Password reset instructions sent. Check your inbox.');
         setMode('login');
         return;
       }
 
       if (mode === 'login') {
-        const { error } = await signIn(email, password);
+        const { error } = await signIn(normalizedEmail, passwordValue);
         if (error) {
+          const errorMessage = error.message.toLowerCase();
+
+          if (errorMessage.includes('failed to fetch')) {
+            toast.error('Could not reach authentication server. Please check your connection and try again.');
+            return;
+          }
+
+          if (errorMessage.includes('not authorized') || errorMessage.includes('unauthorized')) {
+            if (clerkOnlyMode) {
+              toast.error('Password sign-in is not enabled for this Clerk project. Use Continue with Google or enable Email + Password in Clerk.');
+            } else {
+              toast.error(t.auth.invalidCredentials);
+            }
+            return;
+          }
+
+          if (errorMessage.includes('email not confirmed')) {
+            const { error: resendError } = await resendConfirmationEmail(normalizedEmail, '/auth');
+            if (resendError) {
+              toast.error('Email not confirmed. We could not resend the confirmation email.');
+            } else {
+              toast.error('Email not confirmed. We sent a new confirmation link.');
+            }
+            return;
+          }
+
           if (error.message.includes('Invalid login credentials')) {
             toast.error(t.auth.invalidCredentials);
           } else {
@@ -87,10 +139,20 @@ export default function Auth() {
         }
         toast.success(t.auth.loginSuccess);
         persistDemoFlags();
-        navigate(postAuthPath);
+        navigate(postAuthPath, { replace: true });
       } else {
-        const { error } = await signUp(email, password, fullName);
+        const { error, needsEmailConfirmation } = await signUp(
+          normalizedEmail,
+          passwordValue,
+          fullName.trim(),
+        );
         if (error) {
+          const signupErrorMessage = error.message.toLowerCase();
+          if (clerkOnlyMode && (signupErrorMessage.includes('not authorized') || signupErrorMessage.includes('strategy') || signupErrorMessage.includes('password'))) {
+            toast.error('Email/password sign-up is disabled in Clerk. Enable Email + Password in Clerk or use Continue with Google.');
+            return;
+          }
+
           if (error.message.includes('already registered')) {
             toast.error(t.auth.emailInUse);
           } else {
@@ -98,9 +160,14 @@ export default function Auth() {
           }
           return;
         }
+        if (needsEmailConfirmation) {
+          toast.success('Account created. Please confirm your email to continue.');
+          setMode('login');
+          return;
+        }
         toast.success(t.auth.signupSuccess);
         persistDemoFlags();
-        navigate(postAuthPath);
+        navigate(postAuthPath, { replace: true });
       }
     } finally {
       setLoading(false);
@@ -112,7 +179,7 @@ export default function Auth() {
     try {
       const { error } = await signInWithGoogle(postAuthPath);
       if (error) {
-        toast.error(t.auth.googleError);
+        toast.error(error.message || t.auth.googleError);
       }
     } finally {
       setLoading(false);
@@ -131,21 +198,63 @@ export default function Auth() {
   const isReset = mode === 'reset';
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    <div className="min-h-screen bg-background p-4 sm:p-6">
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
+        <div className="absolute -top-24 left-0 w-[520px] h-[520px] bg-primary/10 rounded-full blur-3xl" />
+        <div className="absolute -bottom-24 right-0 w-[520px] h-[520px] bg-primary/10 rounded-full blur-3xl" />
       </div>
 
-      <div className="relative w-full max-w-md">
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
-            <Zap className="h-5 w-5 text-primary-foreground" />
+      <div className="relative mx-auto w-full max-w-6xl lg:grid lg:grid-cols-[1.05fr_0.95fr] lg:gap-10 lg:items-center">
+        <div className="hidden lg:block">
+          <div className="max-w-xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/30 mb-5">
+              <TrendingUp className="h-4 w-4 text-primary" />
+              <span className="text-xs font-semibold text-primary uppercase tracking-wide">{pitch.label}</span>
+            </div>
+
+            <h1 className="text-4xl xl:text-5xl font-bold text-foreground leading-tight text-balance">
+              {pitch.title}
+            </h1>
+            <p className="text-lg text-muted-foreground mt-5 text-balance">
+              {pitch.subtitle}
+            </p>
+
+            <div className="mt-8 space-y-3">
+              {pitch.bullets.map((item) => (
+                <div key={item} className="flex items-start gap-3">
+                  <ShieldCheck className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+                  <p className="text-sm text-foreground/90">{item}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-8 grid grid-cols-3 gap-3">
+              {pitch.trust.map((item) => (
+                <div key={item} className="rounded-lg border border-border bg-card/60 px-3 py-2 text-xs text-center text-muted-foreground">
+                  {item}
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-8 rounded-xl border border-primary/20 bg-primary/5 p-4">
+              <p className="text-sm font-semibold text-foreground">
+                This week goal: leave with reliable numbers for decisions and fundraising.
+              </p>
+              <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                <Clock3 className="h-4 w-4 text-primary" />
+                <span>Initial setup in under 10 minutes</span>
+              </div>
+            </div>
           </div>
-          <span className="text-2xl font-bold text-foreground">GestorNiq</span>
         </div>
 
-        <div className="metric-card p-8">
+        <div className="w-full max-w-md mx-auto lg:max-w-lg lg:mx-0 lg:justify-self-end">
+          <div className="mb-6 flex justify-center">
+            <BrandLogo size="md" theme="dark" />
+          </div>
+
+        <div className="metric-card p-8 relative overflow-hidden">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/50 via-primary to-primary/50" />
           <div className="text-center mb-8">
             <h1 className="text-2xl font-bold text-foreground">
               {isReset ? 'Reset Password' : isLogin ? t.auth.welcomeBack : t.auth.createAccount}
@@ -153,6 +262,12 @@ export default function Auth() {
             <p className="text-muted-foreground mt-2">
               {isReset ? 'Enter your email and we\'ll send you a reset link.' : isLogin ? t.auth.loginSubtitle : t.auth.signupSubtitle}
             </p>
+            {!isReset && (
+              <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs text-primary font-medium">
+                <Clock3 className="h-3.5 w-3.5" />
+                3-day trial to validate value before subscribing
+              </div>
+            )}
           </div>
 
           {!isReset && (
@@ -196,7 +311,15 @@ export default function Auth() {
                 <label className="text-sm font-medium text-muted-foreground">{t.auth.fullName}</label>
                 <div className="relative mt-1">
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input type="text" placeholder="Your name" value={fullName} onChange={(e) => setFullName(e.target.value)} className="pl-11 h-12" />
+                  <Input
+                    type="text"
+                    name="fullName"
+                    autoComplete="name"
+                    placeholder="Your name"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    className="pl-11 h-12"
+                  />
                 </div>
                 {errors.fullName && <p className="text-sm text-destructive mt-1">{errors.fullName}</p>}
               </div>
@@ -206,7 +329,15 @@ export default function Auth() {
               <label className="text-sm font-medium text-muted-foreground">{t.auth.email}</label>
               <div className="relative mt-1">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} className="pl-11 h-12" />
+                <Input
+                  type="email"
+                  name="email"
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="pl-11 h-12"
+                />
               </div>
               {errors.email && <p className="text-sm text-destructive mt-1">{errors.email}</p>}
             </div>
@@ -216,7 +347,15 @@ export default function Auth() {
                 <label className="text-sm font-medium text-muted-foreground">{t.auth.password}</label>
                 <div className="relative mt-1">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="pl-11 h-12" />
+                  <Input
+                    type="password"
+                    name="password"
+                    autoComplete={isLogin ? 'current-password' : 'new-password'}
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pl-11 h-12"
+                  />
                 </div>
                 {errors.password && <p className="text-sm text-destructive mt-1">{errors.password}</p>}
               </div>
@@ -269,6 +408,7 @@ export default function Auth() {
             {t.auth.backToHome}
           </button>
         </div>
+      </div>
       </div>
     </div>
   );

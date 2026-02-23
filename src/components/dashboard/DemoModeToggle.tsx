@@ -12,7 +12,7 @@ export function DemoModeToggle() {
       <Switch
         checked={isDemoMode}
         onCheckedChange={setDemoMode}
-        aria-label="Modo Demo"
+        aria-label="Demo mode"
       />
     </div>
   );

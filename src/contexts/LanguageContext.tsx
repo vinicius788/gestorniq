@@ -1,7 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { Language, getStoredLanguage, setStoredLanguage, LANGUAGES } from '@/lib/i18n';
 import { en, type Translations } from '@/lib/i18n/translations/en';
-import { ptBR } from '@/lib/i18n/translations/pt-BR';
 
 interface LanguageContextType {
   language: Language;
@@ -14,7 +13,6 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 
 const translations: Record<Language, Translations> = {
   en,
-  'pt-BR': ptBR,
 };
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
@@ -27,7 +25,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Set document lang attribute
-    document.documentElement.lang = language === 'pt-BR' ? 'pt-BR' : 'en';
+    document.documentElement.lang = 'en';
   }, [language]);
 
   const t = translations[language];

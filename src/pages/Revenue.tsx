@@ -1,4 +1,5 @@
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { DollarSign, TrendingUp, Plus, Upload, Loader2, X } from "lucide-react";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
@@ -10,20 +11,34 @@ import { useCompany } from "@/hooks/useCompany";
 import { useApp } from "@/contexts/AppContext";
 import { toast } from "sonner";
 import { formatDate, type Currency } from "@/lib/format";
+import { timeframeLabels } from "@/lib/formatters";
+import { parseCsv } from "@/lib/csv";
+import {
+  normalizeRevenueSnapshotInput,
+  type RevenueSnapshotInput,
+} from "@/lib/metric-input";
+
+const TODAY = () => new Date().toISOString().split("T")[0];
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
 
 export default function Revenue() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { company } = useCompany();
-  const { metrics, revenueSnapshots, addRevenueSnapshot, loading } = useMetrics();
-  const { isDemoMode } = useApp();
+  const { metrics, revenueSnapshots, filteredRevenueSnapshots, addRevenueSnapshot, addRevenueSnapshots, loading } = useMetrics();
+  const { isDemoMode, timeframe } = useApp();
   
   const [showForm, setShowForm] = useState(false);
   const [showCsvImport, setShowCsvImport] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [csvData, setCsvData] = useState<any[]>([]);
+  const [csvData, setCsvData] = useState<RevenueSnapshotInput[]>([]);
+  const [csvErrors, setCsvErrors] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [formData, setFormData] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: TODAY(),
     mrr: '',
     new_mrr: '',
     expansion_mrr: '',
@@ -31,6 +46,34 @@ export default function Revenue() {
   });
 
   const currency = (company?.currency || 'USD') as Currency;
+  const timeframeLabel = timeframeLabels[timeframe] ?? timeframe;
+  const hasHistoricalDataOutsideTimeframe = filteredRevenueSnapshots.length === 0 && revenueSnapshots.length > 0;
+
+  const getSourceLabel = (source: string | null | undefined) => {
+    const normalized = (source || "manual").toLowerCase();
+
+    if (normalized === "demo") return "Demo";
+    if (normalized === "csv") return "CSV";
+    if (normalized === "manual") return "Manual";
+    if (normalized === "stripe") return "Stripe";
+
+    return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  };
+
+  useEffect(() => {
+    const action = searchParams.get("action");
+    if (!action) return;
+
+    if (action === "add") {
+      setShowForm(true);
+    }
+
+    if (action === "import") {
+      fileInputRef.current?.click();
+    }
+
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,25 +89,27 @@ export default function Revenue() {
 
     setSubmitting(true);
     try {
-      await addRevenueSnapshot({
+      const normalized = normalizeRevenueSnapshotInput({
         date: formData.date,
-        mrr: parseFloat(formData.mrr),
-        new_mrr: parseFloat(formData.new_mrr) || 0,
-        expansion_mrr: parseFloat(formData.expansion_mrr) || 0,
-        churned_mrr: parseFloat(formData.churned_mrr) || 0,
+        mrr: formData.mrr,
+        new_mrr: formData.new_mrr,
+        expansion_mrr: formData.expansion_mrr,
+        churned_mrr: formData.churned_mrr,
         source: 'manual',
       });
+
+      await addRevenueSnapshot(normalized);
       toast.success('Revenue data saved!');
       setShowForm(false);
       setFormData({
-        date: new Date().toISOString().split('T')[0],
+        date: TODAY(),
         mrr: '',
         new_mrr: '',
         expansion_mrr: '',
         churned_mrr: '',
       });
-    } catch (error) {
-      toast.error('Error saving data');
+    } catch (submitError) {
+      toast.error(getErrorMessage(submitError, 'Error saving data'));
     } finally {
       setSubmitting(false);
     }
@@ -78,25 +123,45 @@ export default function Revenue() {
     reader.onload = (event) => {
       try {
         const text = event.target?.result as string;
-        const lines = text.split('\n');
-        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-        
-        const parsed = lines.slice(1)
-          .filter(line => line.trim())
-          .map(line => {
-            const values = line.split(',');
-            const row: any = {};
-            headers.forEach((header, i) => {
-              row[header] = values[i]?.trim();
+        const rows = parseCsv(text);
+        const parsed: RevenueSnapshotInput[] = [];
+        const validationErrors: string[] = [];
+
+        rows.forEach((row, index) => {
+          try {
+            const normalized = normalizeRevenueSnapshotInput({
+              date: row.date || row.data || TODAY(),
+              mrr: row.mrr || row.total_mrr || 0,
+              new_mrr: row.new_mrr || row.novo_mrr || 0,
+              expansion_mrr: row.expansion_mrr || row.expansao_mrr || 0,
+              churned_mrr: row.churned_mrr || row.churn_mrr || 0,
+              source: 'csv',
             });
-            return row;
-          });
-        
+            parsed.push(normalized);
+          } catch (rowError) {
+            validationErrors.push(`Row ${index + 2}: ${getErrorMessage(rowError, 'Invalid data')}`);
+          }
+        });
+
+        if (parsed.length === 0) {
+          toast.error('No valid rows found in CSV');
+          setCsvData([]);
+          setCsvErrors(validationErrors);
+          setShowCsvImport(false);
+          return;
+        }
+
         setCsvData(parsed);
+        setCsvErrors(validationErrors);
         setShowCsvImport(true);
-        toast.success(`${parsed.length} rows imported`);
-      } catch (error) {
-        toast.error('Error processing CSV');
+
+        if (validationErrors.length > 0) {
+          toast.warning(`${parsed.length} valid rows loaded. ${validationErrors.length} rows were skipped.`);
+        } else {
+          toast.success(`${parsed.length} rows imported`);
+        }
+      } catch (csvError) {
+        toast.error(getErrorMessage(csvError, 'Error processing CSV'));
       }
     };
     reader.readAsText(file);
@@ -110,21 +175,13 @@ export default function Revenue() {
 
     setSubmitting(true);
     try {
-      for (const row of csvData) {
-        await addRevenueSnapshot({
-          date: row.date || row.data || new Date().toISOString().split('T')[0],
-          mrr: parseFloat(row.mrr) || 0,
-          new_mrr: parseFloat(row.new_mrr || row.novo_mrr) || 0,
-          expansion_mrr: parseFloat(row.expansion_mrr || row.expansao_mrr) || 0,
-          churned_mrr: parseFloat(row.churned_mrr || row.churn_mrr) || 0,
-          source: 'csv',
-        });
-      }
+      await addRevenueSnapshots(csvData);
       toast.success('Data imported successfully!');
       setShowCsvImport(false);
       setCsvData([]);
-    } catch (error) {
-      toast.error('Error importing data');
+      setCsvErrors([]);
+    } catch (importError) {
+      toast.error(getErrorMessage(importError, 'Error importing data'));
     } finally {
       setSubmitting(false);
     }
@@ -185,7 +242,13 @@ export default function Revenue() {
               <X className="h-4 w-4" />
             </Button>
           </div>
-          <p className="text-sm text-muted-foreground mb-4">{csvData.length} records to import</p>
+          <p className="text-sm text-muted-foreground mb-4">{csvData.length} valid records to import</p>
+          {csvErrors.length > 0 && (
+            <div className="mb-4 rounded-lg border border-warning/20 bg-warning/10 p-3 text-sm text-warning-foreground">
+              <p className="font-medium">{csvErrors.length} rows skipped due to validation errors.</p>
+              <p className="mt-1 text-xs text-muted-foreground">{csvErrors.slice(0, 3).join(' • ')}</p>
+            </div>
+          )}
           <div className="flex gap-2">
             <Button onClick={handleImportCsv} disabled={submitting}>
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm Import'}
@@ -292,10 +355,15 @@ export default function Revenue() {
 
       {/* History Table */}
       <div className="metric-card">
-        <h3 className="text-lg font-semibold text-foreground mb-4">Revenue History</h3>
-        {revenueSnapshots.length === 0 ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-lg font-semibold text-foreground">Revenue History</h3>
+          <span className="text-xs text-muted-foreground">Showing: {timeframeLabel}</span>
+        </div>
+        {filteredRevenueSnapshots.length === 0 ? (
           <p className="text-muted-foreground text-center py-8">
-            No revenue data. Click "Add Revenue" to get started.
+            {hasHistoricalDataOutsideTimeframe
+              ? "No revenue snapshots in the selected timeframe. Change timeframe to view older entries."
+              : 'No revenue data. Click "Add Revenue" to get started.'}
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -312,7 +380,7 @@ export default function Revenue() {
                 </tr>
               </thead>
               <tbody>
-                {revenueSnapshots.slice(0, 10).map((snapshot) => (
+                {filteredRevenueSnapshots.slice(0, 10).map((snapshot) => (
                   <tr key={snapshot.id} className="border-b border-border/50 hover:bg-muted/30">
                     <td className="py-3 px-2 text-sm text-foreground whitespace-nowrap">
                       {formatDate(snapshot.date)}
@@ -332,8 +400,8 @@ export default function Revenue() {
                     <td className="py-3 px-2 text-sm text-destructive text-right whitespace-nowrap tabular-nums">
                       -<MoneyValue value={snapshot.churned_mrr} currency={currency} size="sm" />
                     </td>
-                    <td className="py-3 px-2 text-sm text-muted-foreground capitalize">
-                      {snapshot.source === 'demo' ? 'Demo' : snapshot.source === 'csv' ? 'CSV' : 'Manual'}
+                    <td className="py-3 px-2 text-sm text-muted-foreground">
+                      {getSourceLabel(snapshot.source)}
                     </td>
                   </tr>
                 ))}

@@ -1,62 +1,42 @@
 import { Users, UserPlus, TrendingUp, Activity } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { useMetrics } from "@/hooks/useMetrics";
 import { FormattedNumber, FormattedPercent } from "@/components/ui/formatted-value";
+import { calculateUserCadenceMetrics } from "@/lib/calculations";
 
 export function UserGrowthMetrics() {
-  const { metrics, userMetrics } = useMetrics();
+  const { metrics, filteredUserMetrics } = useMetrics();
+  const cadence = calculateUserCadenceMetrics(filteredUserMetrics);
 
-  // Calculate growth metrics if data exists
-  const hasData = userMetrics.length >= 2;
-  
-  // Current and previous data
-  const current = userMetrics[0];
-  const previous = userMetrics[1];
-  
-  // Daily growth (approximated)
-  const dailyGrowth = hasData && previous ? {
-    value: Math.round((current.new_users - previous.new_users) / 30),
-    change: previous.new_users > 0 
-      ? ((current.new_users - previous.new_users) / previous.new_users) * 100 
-      : 0,
-  } : null;
-
-  // Weekly growth (approximated)
-  const weeklyGrowth = hasData && previous ? {
-    value: Math.round((current.new_users - previous.new_users) / 4),
-    change: previous.new_users > 0 
-      ? ((current.new_users - previous.new_users) / previous.new_users) * 100 
-      : 0,
-  } : null;
-
-  // Monthly growth
-  const monthlyGrowth = hasData && previous ? {
-    value: current.new_users,
-    change: previous.new_users > 0 
-      ? ((current.new_users - previous.new_users) / previous.new_users) * 100 
-      : 0,
-  } : null;
+  const formatSignedValue = (value: number | null) => {
+    if (value === null) return "—";
+    const rounded = Math.round(value);
+    const sign = rounded > 0 ? "+" : "";
+    return (
+      <span className="tabular-nums">
+        {sign}
+        <FormattedNumber value={rounded} />
+      </span>
+    );
+  };
 
   const growthMetrics = [
     { 
       label: "Day over Day", 
-      value: dailyGrowth ? `+${dailyGrowth.value}` : '—',
-      change: dailyGrowth?.change ?? null, 
-      period: "avg per day" 
+      value: formatSignedValue(cadence.daily.value),
+      change: cadence.daily.change,
+      period: "new users / day" 
     },
     { 
       label: "Week over Week", 
-      value: weeklyGrowth ? `+${weeklyGrowth.value}` : '—',
-      change: weeklyGrowth?.change ?? null, 
-      period: "avg per week" 
+      value: formatSignedValue(cadence.weekly.value),
+      change: cadence.weekly.change,
+      period: "new users / week" 
     },
     { 
       label: "Month over Month", 
-      value: monthlyGrowth ? (
-        <span className="tabular-nums">+<FormattedNumber value={monthlyGrowth.value} /></span>
-      ) : '—',
-      change: monthlyGrowth?.change ?? null, 
-      period: "vs previous month" 
+      value: formatSignedValue(cadence.monthly.value),
+      change: cadence.monthly.change,
+      period: "new users / 30 days" 
     },
   ];
 
@@ -116,11 +96,11 @@ export function UserGrowthMetrics() {
               </div>
               <div>
                 <p className="text-sm font-medium text-foreground">{metric.label}</p>
-                <p className="text-xs text-muted-foreground">{metric.period}</p>
-              </div>
+              <p className="text-xs text-muted-foreground">{metric.period}</p>
             </div>
-            <div className="text-right">
-              <p className="text-lg font-bold text-foreground whitespace-nowrap tabular-nums">{metric.value}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-lg font-bold text-foreground whitespace-nowrap tabular-nums">{metric.value}</p>
               {metric.change !== null ? (
                 <p className="text-sm font-medium tabular-nums">
                   <FormattedPercent value={metric.change} showSign colorize />

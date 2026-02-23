@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Clock, AlertTriangle, CreditCard, Check, Loader2, ExternalLink, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTrial } from '@/hooks/useTrial';
@@ -7,6 +7,24 @@ import { useCompany } from '@/hooks/useCompany';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+
+const formatPlanLabel = (plan?: string | null) => {
+  if (!plan || plan === 'free') return 'Standard';
+  return plan
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+};
+
+type StandardPlan = {
+  name: string;
+  price: string;
+  annualPrice: string;
+  description: string;
+  badge: string;
+  features: string[];
+  cta: string;
+};
 
 function TrialStatusBanner({ isTrialExpired, daysRemaining, trial }: { isTrialExpired: boolean; daysRemaining: number; trial: any }) {
   return (
@@ -54,7 +72,7 @@ function ActiveSubscriptionBanner({ subscription, onManage, managingPortal }: { 
         <Check className="h-6 w-6 text-success shrink-0" />
         <div className="flex-1">
           <h2 className="text-xl font-bold text-foreground">
-            {subscription.plan?.charAt(0).toUpperCase() + subscription.plan?.slice(1)} Plan — Active
+            {formatPlanLabel(subscription.plan)} Plan — Active
           </h2>
           <p className="text-muted-foreground mt-1">
             {subscription.status === 'trialing' 
@@ -77,20 +95,18 @@ function ActiveSubscriptionBanner({ subscription, onManage, managingPortal }: { 
   );
 }
 
-function PricingCard({ plan, highlighted, badge, onSubscribe, loadingPlan }: {
-  plan: { name: string; price: string; description: string; features: string[] };
-  highlighted: boolean;
-  badge?: string;
-  onSubscribe: (name: string) => void;
-  loadingPlan: string | null;
+function PricingCard({ plan, onSubscribe, isLoading, perMonthLabel, billedAnnuallyLabel }: {
+  plan: StandardPlan;
+  onSubscribe: () => void;
+  isLoading: boolean;
+  perMonthLabel: string;
+  billedAnnuallyLabel: string;
 }) {
   return (
-    <div className={`relative rounded-2xl border p-6 ${
-      highlighted ? 'bg-primary/5 border-primary shadow-lg scale-105' : 'bg-card border-border'
-    }`}>
-      {badge && (
+    <div className="relative rounded-2xl border p-6 bg-primary/5 border-primary shadow-lg">
+      {plan.badge && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-          <span className="bg-primary text-primary-foreground px-3 py-1 rounded-full text-xs font-medium">{badge}</span>
+          <span className="bg-primary text-primary-foreground px-3 py-1 rounded-full text-xs font-medium">{plan.badge}</span>
         </div>
       )}
       <div className="mb-6">
@@ -99,7 +115,10 @@ function PricingCard({ plan, highlighted, badge, onSubscribe, loadingPlan }: {
       </div>
       <div className="mb-6">
         <span className="text-4xl font-bold text-foreground">{plan.price}</span>
-        {plan.price !== 'Custom' && <span className="text-muted-foreground">/month</span>}
+        <span className="text-muted-foreground">{perMonthLabel}</span>
+        <p className="text-sm text-muted-foreground mt-2">
+          {billedAnnuallyLabel}: {plan.annualPrice}
+        </p>
       </div>
       <ul className="space-y-3 mb-8">
         {plan.features.map((feature, idx) => (
@@ -111,16 +130,14 @@ function PricingCard({ plan, highlighted, badge, onSubscribe, loadingPlan }: {
       </ul>
       <Button
         className="w-full"
-        variant={highlighted ? 'default' : 'outline'}
-        onClick={() => onSubscribe(plan.name)}
-        disabled={loadingPlan !== null}
+        variant="default"
+        onClick={onSubscribe}
+        disabled={isLoading}
       >
-        {loadingPlan === plan.name ? (
+        {isLoading ? (
           <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing...</>
-        ) : plan.price === 'Custom' ? (
-          'Contact Sales'
         ) : (
-          <><CreditCard className="mr-2 h-4 w-4" />Subscribe</>
+          <><CreditCard className="mr-2 h-4 w-4" />{plan.cta}</>
         )}
       </Button>
     </div>
@@ -129,69 +146,26 @@ function PricingCard({ plan, highlighted, badge, onSubscribe, loadingPlan }: {
 
 export default function Billing() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { trial, subscription, daysRemaining, isTrialActive, isTrialExpired, hasActiveAccess, refetch } = useTrial();
   const { company } = useCompany();
   const { t } = useLanguage();
-  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+  const [isProcessingCheckout, setIsProcessingCheckout] = useState(false);
   const [managingPortal, setManagingPortal] = useState(false);
 
-  const plans = [
-    {
-      name: 'Starter',
-      price: '$29',
-      description: 'For early-stage founders',
-      features: [
-        'Core metrics (MRR/ARR/Growth)',
-        'Basic valuation calculator',
-        'Dashboard & charts',
-        'Manual + CSV import',
-        'Email support',
-      ],
-    },
-    {
-      name: 'Pro',
-      price: '$59',
-      description: 'For growth-stage startups',
-      features: [
-        'Everything in Starter',
-        'Autonomous CFO forecasts (3/6/12m)',
-        'Valuation scenarios',
-        'Equity pricing calculator',
-        'Export reports & data',
-        'Priority support',
-      ],
-    },
-    {
-      name: 'Enterprise',
-      price: 'Custom',
-      description: 'For larger organizations',
-      features: [
-        'Everything in Pro',
-        'Multi-company support',
-        'API access',
-        'Custom integrations',
-        'Dedicated support',
-        'SSO & advanced security',
-      ],
-    },
-  ];
+  const standardPlan: StandardPlan = t.pricing.standard;
 
-  const handleSubscribe = async (planName: string) => {
-    if (planName === 'Enterprise') {
-      window.location.href = 'mailto:sales@gestorniq.com?subject=Enterprise%20Plan%20Inquiry';
-      return;
-    }
-
+  const handleSubscribe = async () => {
     if (!company) {
       toast.error('Company not found. Please complete onboarding first.');
       return;
     }
 
-    setLoadingPlan(planName);
+    setIsProcessingCheckout(true);
 
     try {
       const { data, error } = await supabase.functions.invoke('create-checkout', {
-        body: { plan: planName.toLowerCase(), company_id: company.id }
+        body: { plan: 'standard', company_id: company.id },
       });
 
       if (error) throw new Error(error.message || 'Failed to create checkout session');
@@ -205,7 +179,7 @@ export default function Billing() {
       console.error('Checkout error:', err);
       toast.error(err instanceof Error ? err.message : 'Failed to start checkout');
     } finally {
-      setLoadingPlan(null);
+      setIsProcessingCheckout(false);
     }
   };
 
@@ -229,9 +203,13 @@ export default function Billing() {
     }
   };
 
-  // Check for checkout success/cancel query params
-  const params = new URLSearchParams(window.location.search);
-  const checkoutStatus = params.get('checkout');
+  const checkoutStatus = useMemo(() => searchParams.get('checkout'), [searchParams]);
+
+  useEffect(() => {
+    if (checkoutStatus === 'success') {
+      void refetch();
+    }
+  }, [checkoutStatus, refetch]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -252,6 +230,18 @@ export default function Billing() {
           </div>
         )}
 
+        {checkoutStatus === 'canceled' && (
+          <div className="mb-8 p-6 rounded-xl border bg-warning/10 border-warning/20">
+            <div className="flex items-center gap-4">
+              <AlertTriangle className="h-6 w-6 text-warning" />
+              <div>
+                <h2 className="text-xl font-bold text-foreground">Checkout canceled</h2>
+                <p className="text-muted-foreground">No charge was made. You can restart checkout whenever you are ready.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Active subscription banner */}
         <ActiveSubscriptionBanner 
           subscription={subscription} 
@@ -267,25 +257,22 @@ export default function Billing() {
         {/* Header */}
         <div className="text-center mb-12">
           <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-            {hasActiveAccess ? 'Your Plan' : 'Choose your plan'}
+            {hasActiveAccess ? 'Your Plan' : 'Choose your annual plan'}
           </h1>
           <p className="text-lg text-muted-foreground">
-            {hasActiveAccess ? 'Manage your subscription below.' : 'Get back to tracking your metrics. Cancel anytime.'}
+            {hasActiveAccess ? 'Manage your subscription below.' : 'Standard plan: $39/month billed annually. Cancel anytime.'}
           </p>
         </div>
 
-        {/* Pricing Cards */}
-        <div className="grid md:grid-cols-3 gap-6 mb-12">
-          {plans.map((plan, i) => (
-            <PricingCard
-              key={plan.name}
-              plan={plan}
-              highlighted={i === 1}
-              badge={i === 1 ? 'Most Popular' : undefined}
-              onSubscribe={handleSubscribe}
-              loadingPlan={loadingPlan}
-            />
-          ))}
+        {/* Pricing Card */}
+        <div className="max-w-xl mx-auto mb-12">
+          <PricingCard
+            plan={standardPlan}
+            onSubscribe={handleSubscribe}
+            isLoading={isProcessingCheckout}
+            perMonthLabel={t.pricing.perMonth}
+            billedAnnuallyLabel={t.pricing.billedAnnually}
+          />
         </div>
 
         {/* Back to Dashboard */}
@@ -310,7 +297,7 @@ export default function Billing() {
         {/* Security Note */}
         <div className="text-center mt-8">
           <p className="text-sm text-muted-foreground">
-            🔒 Secure payment powered by Stripe. Cancel anytime.
+            [Secure] Annual billing powered by Stripe. Cancel anytime.
           </p>
         </div>
       </div>

@@ -2,6 +2,8 @@
  * Módulo centralizado de cálculos - Fonte única de verdade para todas as métricas
  */
 
+const MS_IN_DAY = 24 * 60 * 60 * 1000;
+
 export interface RevenueSnapshot {
   id: string;
   company_id: string;
@@ -86,6 +88,52 @@ export interface CalculatedMetrics {
 
 export type Timeframe = '30d' | '90d' | '12m' | 'all';
 
+export interface CadenceMetric {
+  value: number | null;
+  change: number | null;
+}
+
+export interface UserCadenceMetrics {
+  daily: CadenceMetric;
+  weekly: CadenceMetric;
+  monthly: CadenceMetric;
+}
+
+export interface SuggestedMultipleBreakdown {
+  baseMultiple: number;
+  revenueGrowthRate: number;
+  userGrowthRate: number;
+  revenueContribution: number;
+  userContribution: number;
+  pmfBonus: number;
+  balanceBonus: number;
+  totalMultiple: number;
+}
+
+function toUtcDay(date: string): Date {
+  const [year, month, day] = date.split('-').map(Number);
+  return new Date(Date.UTC(year, (month || 1) - 1, day || 1));
+}
+
+function diffDays(newerDate: string, olderDate: string): number {
+  const diff = toUtcDay(newerDate).getTime() - toUtcDay(olderDate).getTime();
+  return Math.max(1, Math.round(diff / MS_IN_DAY));
+}
+
+function getCutoffDate(timeframe: Exclude<Timeframe, 'all'>): Date {
+  const now = new Date();
+  const todayUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+
+  if (timeframe === '12m') {
+    const cutoff = new Date(todayUtc);
+    cutoff.setUTCMonth(cutoff.getUTCMonth() - 12);
+    return cutoff;
+  }
+
+  const days = timeframe === '30d' ? 30 : 90;
+  return new Date(todayUtc.getTime() - days * MS_IN_DAY);
+}
+
 /**
  * Filtra snapshots por período
  */
@@ -94,57 +142,56 @@ export function filterByTimeframe<T extends { date: string }>(
   timeframe: Timeframe
 ): T[] {
   if (timeframe === 'all') return data;
-  
-  const now = new Date();
-  let cutoffDate: Date;
-  
-  switch (timeframe) {
-    case '30d':
-      cutoffDate = new Date(now.setDate(now.getDate() - 30));
-      break;
-    case '90d':
-      cutoffDate = new Date(now.setDate(now.getDate() - 90));
-      break;
-    case '12m':
-      cutoffDate = new Date(now.setMonth(now.getMonth() - 12));
-      break;
-    default:
-      return data;
-  }
-  
-  return data.filter(item => new Date(item.date) >= cutoffDate);
+
+  const cutoffDate = getCutoffDate(timeframe);
+  return data.filter((item) => toUtcDay(item.date).getTime() >= cutoffDate.getTime());
 }
 
 /**
  * Calcula o múltiplo de valuation sugerido baseado em crescimento
  */
+export function calculateSuggestedMultipleBreakdown(
+  mrrGrowth: number | null,
+  userGrowth: number | null,
+): SuggestedMultipleBreakdown {
+  const revenueGrowthRate = mrrGrowth ?? 0;
+  const userGrowthRate = userGrowth ?? 0;
+
+  // Base: 5x
+  const baseMultiple = 5;
+
+  // Contribuição de receita (0-30% = 0-5x)
+  const revenueContribution = Math.min(revenueGrowthRate / 6, 5);
+
+  // Contribuição de usuários (0-30% = 0-5x)
+  const userContribution = Math.min(userGrowthRate / 6, 5);
+
+  // Bônus PMF: alto crescimento de usuários com receita moderada
+  const pmfBonus = userGrowthRate > 10 && revenueGrowthRate < 10 ? 2 : 0;
+
+  // Bônus equilíbrio
+  const balanceBonus = revenueGrowthRate > 5 && userGrowthRate > 5 ? 1 : 0;
+
+  const rawTotal = baseMultiple + revenueContribution + userContribution + pmfBonus + balanceBonus;
+  const totalMultiple = Math.round(rawTotal * 10) / 10;
+
+  return {
+    baseMultiple,
+    revenueGrowthRate,
+    userGrowthRate,
+    revenueContribution,
+    userContribution,
+    pmfBonus,
+    balanceBonus,
+    totalMultiple,
+  };
+}
+
 export function calculateSuggestedMultiple(
   mrrGrowth: number | null,
   userGrowth: number | null
 ): number {
-  const revGrowth = mrrGrowth ?? 0;
-  const usrGrowth = userGrowth ?? 0;
-  
-  // Base: 5x
-  let multiple = 5;
-  
-  // Contribuição de receita (0-30% = 0-5x)
-  multiple += Math.min(revGrowth / 6, 5);
-  
-  // Contribuição de usuários (0-30% = 0-5x)
-  multiple += Math.min(usrGrowth / 6, 5);
-  
-  // Bônus PMF: alto crescimento de usuários com receita moderada
-  if (usrGrowth > 10 && revGrowth < 10) {
-    multiple += 2;
-  }
-  
-  // Bônus equilíbrio
-  if (revGrowth > 5 && usrGrowth > 5) {
-    multiple += 1;
-  }
-  
-  return Math.round(multiple * 10) / 10;
+  return calculateSuggestedMultipleBreakdown(mrrGrowth, userGrowth).totalMultiple;
 }
 
 /**
@@ -169,6 +216,49 @@ export function calculateForecast(
   };
 }
 
+export function calculateUserCadenceMetrics(userMetrics: UserMetric[]): UserCadenceMetrics {
+  const sorted = [...userMetrics].sort(
+    (a, b) => toUtcDay(b.date).getTime() - toUtcDay(a.date).getTime(),
+  );
+
+  const latest = sorted[0];
+  const previous = sorted[1];
+  const third = sorted[2];
+
+  if (!latest || !previous) {
+    return {
+      daily: { value: null, change: null },
+      weekly: { value: null, change: null },
+      monthly: { value: null, change: null },
+    };
+  }
+
+  const currentPeriodDays = diffDays(latest.date, previous.date);
+  const previousPeriodDays = third ? diffDays(previous.date, third.date) : currentPeriodDays;
+
+  const currentDaily = latest.new_users / currentPeriodDays;
+  const previousDaily = previous.new_users / previousPeriodDays;
+
+  const change = previousDaily > 0
+    ? ((currentDaily - previousDaily) / previousDaily) * 100
+    : null;
+
+  return {
+    daily: {
+      value: currentDaily,
+      change,
+    },
+    weekly: {
+      value: currentDaily * 7,
+      change,
+    },
+    monthly: {
+      value: currentDaily * 30,
+      change,
+    },
+  };
+}
+
 /**
  * Calculate all metrics from snapshots
  */
@@ -179,9 +269,15 @@ export function calculateMetrics(
   timeframe: Timeframe = 'all'
 ): CalculatedMetrics {
   // Aplicar filtro de período
-  const filteredRevenue = filterByTimeframe(revenueSnapshots, timeframe);
-  const filteredUsers = filterByTimeframe(userMetrics, timeframe);
-  const filteredValuation = filterByTimeframe(valuationSnapshots, timeframe);
+  const filteredRevenue = filterByTimeframe(revenueSnapshots, timeframe).sort(
+    (a, b) => toUtcDay(b.date).getTime() - toUtcDay(a.date).getTime(),
+  );
+  const filteredUsers = filterByTimeframe(userMetrics, timeframe).sort(
+    (a, b) => toUtcDay(b.date).getTime() - toUtcDay(a.date).getTime(),
+  );
+  const filteredValuation = filterByTimeframe(valuationSnapshots, timeframe).sort(
+    (a, b) => toUtcDay(b.date).getTime() - toUtcDay(a.date).getTime(),
+  );
   
   // Dados mais recentes (já vem ordenado desc do banco)
   const latestRevenue = filteredRevenue[0];
@@ -202,7 +298,7 @@ export function calculateMetrics(
   const churnedMrr = latestRevenue?.churned_mrr ?? null;
   
   // Crescimento MRR
-  const mrrGrowth = (mrr !== null && previousRevenue?.mrr)
+  const mrrGrowth = (mrr !== null && previousRevenue?.mrr && previousRevenue.mrr > 0)
     ? ((mrr - previousRevenue.mrr) / previousRevenue.mrr) * 100
     : null;
   
@@ -230,7 +326,23 @@ export function calculateMetrics(
   
   // Média de signups diários
   const avgDailySignups = filteredUsers.length > 0
-    ? filteredUsers.reduce((sum, m) => sum + m.new_users, 0) / filteredUsers.length / 30
+    ? (() => {
+        const rates = filteredUsers.map((metric, index) => {
+          const olderSnapshot = filteredUsers[index + 1];
+          if (olderSnapshot) {
+            return metric.new_users / diffDays(metric.date, olderSnapshot.date);
+          }
+
+          const newerSnapshot = filteredUsers[index - 1];
+          if (newerSnapshot) {
+            return metric.new_users / diffDays(newerSnapshot.date, metric.date);
+          }
+
+          return metric.new_users / 30;
+        });
+
+        return rates.reduce((sum, value) => sum + value, 0) / rates.length;
+      })()
     : null;
   
   // Net New MRR
@@ -252,7 +364,23 @@ export function calculateMetrics(
   }
   
   // Forecasts (3, 6, 12 months)
-  const monthlyGrowthRate = mrrGrowth !== null ? mrrGrowth / 100 : 0.05; // default 5%
+  const monthlyGrowthRate = (() => {
+    if (mrr !== null && previousRevenue?.mrr && previousRevenue.mrr > 0 && latestRevenue) {
+      const growthFactor = mrr / previousRevenue.mrr;
+      const elapsedDays = diffDays(latestRevenue.date, previousRevenue.date);
+      const normalized = Math.pow(growthFactor, 30 / elapsedDays) - 1;
+
+      if (Number.isFinite(normalized)) {
+        return Math.max(-0.95, normalized);
+      }
+    }
+
+    if (mrrGrowth !== null) {
+      return mrrGrowth / 100;
+    }
+
+    return 0.05;
+  })();
   const forecast3m = mrr !== null ? calculateForecast(mrr, monthlyGrowthRate, 3, valuationMultiple ?? suggestedMultiple) : null;
   const forecast6m = mrr !== null ? calculateForecast(mrr, monthlyGrowthRate, 6, valuationMultiple ?? suggestedMultiple) : null;
   const forecast12m = mrr !== null ? calculateForecast(mrr, monthlyGrowthRate, 12, valuationMultiple ?? suggestedMultiple) : null;

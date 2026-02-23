@@ -10,16 +10,18 @@ import { OnboardingWizard } from "@/components/dashboard/OnboardingWizard";
 import { AccessGuard } from "@/components/guards/AccessGuard";
 import { TrialBanner } from "@/components/dashboard/TrialBanner";
 import { Loader2 } from "lucide-react";
+import { AppShell } from "./AppShell";
 
 function DashboardContent() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isBootstrappingDemo, setIsBootstrappingDemo] = useState(false);
-  const { company, loading: companyLoading, updateCompany } = useCompany();
+  const { company, loading: companyLoading, error: companyError, updateCompany, ensureCompany } = useCompany();
   const { showOnboarding, setShowOnboarding, setOnboardingComplete, setDemoMode } = useApp();
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const isDemoQuery = new URLSearchParams(location.search).get("demo") === "1";
+  const checkoutQuery = new URLSearchParams(location.search).get("checkout");
   const isDemoStored = localStorage.getItem("gestorniq-demo-mode") === "true";
 
   // Show onboarding if company exists but onboarding not completed
@@ -40,6 +42,13 @@ function DashboardContent() {
       navigate(isDemoQuery || isDemoStored ? '/auth?demo=1' : '/auth');
     }
   }, [user, loading, navigate, isDemoQuery, isDemoStored]);
+
+  useEffect(() => {
+    if (!checkoutQuery) return;
+    if (location.pathname !== "/dashboard") return;
+
+    navigate(`/dashboard/billing?checkout=${encodeURIComponent(checkoutQuery)}`, { replace: true });
+  }, [checkoutQuery, location.pathname, navigate]);
 
   useEffect(() => {
     const shouldBootstrapDemo =
@@ -117,6 +126,29 @@ function DashboardContent() {
     return null;
   }
 
+  if (!companyLoading && !company) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 text-center space-y-4">
+          <h2 className="text-lg font-semibold text-foreground">Workspace setup required</h2>
+          <p className="text-sm text-muted-foreground">
+            We could not find your workspace. Create or recover your company to continue.
+          </p>
+          {companyError && (
+            <p className="text-xs text-destructive">{companyError}</p>
+          )}
+          <button
+            type="button"
+            className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            onClick={() => ensureCompany()}
+          >
+            Recover workspace
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // BLOCKING: If onboarding is not completed, render ONLY the wizard — no dashboard behind
   if (!companyLoading && company && !company.onboarding_completed) {
     return (
@@ -136,31 +168,19 @@ function DashboardContent() {
   }
 
   return (
-    <>
-      <div className="min-h-screen bg-background">
-        {/* Trial Banner */}
-        <TrialBanner />
-        
-        {/* Mobile overlay */}
-        {sidebarOpen && (
-          <div 
-            className="fixed inset-0 z-30 bg-black/50 lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-        
-        <DashboardSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-        
-        <div className="lg:pl-64 min-w-0">
-          <DashboardHeader onMenuClick={() => setSidebarOpen(true)} />
-          <main className="p-4 md:p-6 overflow-x-hidden">
-            <AccessGuard>
-              <Outlet />
-            </AccessGuard>
-          </main>
-        </div>
-      </div>
-    </>
+    <div className="min-h-screen bg-background">
+      <TrialBanner />
+      <AppShell
+        sidebarOpen={sidebarOpen}
+        onDismissSidebar={() => setSidebarOpen(false)}
+        sidebar={<DashboardSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />}
+        header={<DashboardHeader onMenuClick={() => setSidebarOpen(true)} />}
+      >
+        <AccessGuard>
+          <Outlet />
+        </AccessGuard>
+      </AppShell>
+    </div>
   );
 }
 

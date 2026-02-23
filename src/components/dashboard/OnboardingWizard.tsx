@@ -4,8 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useApp } from '@/contexts/AppContext';
-import { useCompany, DataSourceType } from '@/hooks/useCompany';
+import { useCompany } from '@/hooks/useCompany';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { toast } from 'sonner';
 import type { Currency } from '@/lib/currency';
 
 const currencies: { code: Currency; symbol: string }[] = [
@@ -80,15 +81,32 @@ export function OnboardingWizard({ open, onOpenChange }: OnboardingWizardProps) 
       onOpenChange(false);
     } catch (error) {
       console.error('Error saving settings:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to save onboarding settings.');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleUseDemoMode = () => {
-    setDemoMode(true);
-    setOnboardingComplete(true);
-    onOpenChange(false);
+  const handleUseDemoMode = async () => {
+    setSaving(true);
+    try {
+      await updateCompany({
+        name: companyName,
+        currency,
+        data_source: 'demo',
+        onboarding_completed: true,
+        onboarding_completed_at: new Date().toISOString(),
+      });
+
+      setDemoMode(true);
+      setOnboardingComplete(true);
+      onOpenChange(false);
+    } catch (error) {
+      console.error('Error enabling demo mode:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to enable demo mode.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const isStep1Valid = companyName.trim().length > 0;
@@ -248,6 +266,7 @@ export function OnboardingWizard({ open, onOpenChange }: OnboardingWizardProps) 
                 size="sm"
                 className="mt-2"
                 onClick={handleUseDemoMode}
+                disabled={saving}
               >
                 {t.onboarding.step3.useDemoMode}
               </Button>

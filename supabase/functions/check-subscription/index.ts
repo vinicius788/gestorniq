@@ -1,40 +1,32 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import { getCorsHeaders, getRequiredEnv, HttpError, jsonResponse } from "../_shared/http.ts";
+import { createRequestLogger } from "../_shared/logging.ts";
+import { enforceRateLimit } from "../_shared/rate-limit.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+const normalizePlan = (
+  plan: string | null | undefined,
+  fallback: "free" | "standard" = "standard",
+) => {
+  const normalized = (plan ?? "").toLowerCase().trim();
+  if (!normalized) return fallback;
+  if (normalized === "free") return "free";
+  return "standard";
 };
 
-const logStep = (step: string, details?: any) => {
-  const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
-  console.log(`[CHECK-SUBSCRIPTION] ${step}${detailsStr}`);
-};
-
-class HttpError extends Error {
-  status: number;
-
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
-
-const getRequiredEnv = (key: string) => {
-  const value = Deno.env.get(key);
-  if (!value) throw new HttpError(500, `${key} is not configured`);
-  return value;
+const RESPONSE_CACHE_HEADERS = {
+  "Cache-Control": "private, max-age=30, stale-while-revalidate=30",
 };
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: getCorsHeaders(req) });
   }
 
-  try {
-    logStep("Function started");
+  const logger = createRequestLogger("check-subscription", req);
 
+  try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       throw new HttpError(401, "Missing or invalid authorization header");
@@ -49,20 +41,32 @@ serve(async (req) => {
         global: {
           headers: { Authorization: authHeader },
         },
-      }
+      },
     );
 
     const supabaseAdmin = createClient(
       supabaseUrl,
       getRequiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
-      { auth: { persistSession: false } }
+      { auth: { persistSession: false } },
     );
 
     const { data: userData, error: userError } = await supabaseClient.auth.getUser();
     if (userError) throw new HttpError(401, `Authentication error: ${userError.message}`);
+
     const user = userData.user;
     if (!user?.id) throw new HttpError(401, "User not authenticated");
-    logStep("User authenticated", { userId: user.id });
+    logger.setUserId(user.id);
+
+    await enforceRateLimit({
+      req,
+      supabaseAdmin,
+      scope: "check-subscription",
+      userId: user.id,
+      rules: [
+        { name: "burst", windowSeconds: 120, maxRequests: 6 },
+        { name: "hourly", windowSeconds: 3600, maxRequests: 40 },
+      ],
+    });
 
     const stripe = new Stripe(getRequiredEnv("STRIPE_SECRET_KEY"), { apiVersion: "2025-08-27.basil" });
 
@@ -86,8 +90,6 @@ serve(async (req) => {
     }
 
     if (!customerId) {
-      logStep("No Stripe customer found");
-
       const { error: clearError } = await supabaseAdmin
         .from("subscriptions")
         .update({
@@ -101,57 +103,33 @@ serve(async (req) => {
         .eq("user_id", user.id);
 
       if (clearError) {
-        logStep("Failed to clear subscription state", { error: clearError.message });
+        logger.error("subscription.clear_failed", { message: clearError.message });
       }
 
-      return new Response(JSON.stringify({
+      logger.done("subscription.none");
+
+      return jsonResponse({
         subscribed: false,
         plan: null,
         status: "inactive",
         subscription_end: null,
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      });
+      }, 200, RESPONSE_CACHE_HEADERS, req);
     }
 
-    logStep("Found Stripe customer", { customerId });
+    const [activeSubscriptions, trialingSubs, pastDueSubs] = await Promise.all([
+      stripe.subscriptions.list({ customer: customerId, status: "active", limit: 1 }),
+      stripe.subscriptions.list({ customer: customerId, status: "trialing", limit: 1 }),
+      stripe.subscriptions.list({ customer: customerId, status: "past_due", limit: 1 }),
+    ]);
 
-    const activeSubscriptions = await stripe.subscriptions.list({
-      customer: customerId,
-      status: "active",
-      limit: 1,
-    });
+    let resolvedSub: Stripe.Subscription | null = null;
 
-    let hasActiveSub = activeSubscriptions.data.length > 0;
-    let plan = null;
-    let subscriptionEnd = null;
-    let subscriptionStart = null;
-    let stripeSubscriptionId = currentSubscription?.stripe_subscription_id ?? null;
-    let status = "inactive";
-
-    if (!hasActiveSub) {
-      const trialingSubs = await stripe.subscriptions.list({
-        customer: customerId,
-        status: "trialing",
-        limit: 1,
-      });
-      if (trialingSubs.data.length > 0) {
-        hasActiveSub = true;
-        const sub = trialingSubs.data[0];
-        stripeSubscriptionId = sub.id;
-        subscriptionStart = new Date(sub.current_period_start * 1000).toISOString();
-        subscriptionEnd = new Date(sub.current_period_end * 1000).toISOString();
-        plan = (sub.metadata?.plan || "pro").toLowerCase();
-        status = "trialing";
-      }
-    } else {
-      const sub = activeSubscriptions.data[0];
-      stripeSubscriptionId = sub.id;
-      subscriptionStart = new Date(sub.current_period_start * 1000).toISOString();
-      subscriptionEnd = new Date(sub.current_period_end * 1000).toISOString();
-      plan = (sub.metadata?.plan || "pro").toLowerCase();
-      status = "active";
+    if (activeSubscriptions.data.length > 0) {
+      resolvedSub = activeSubscriptions.data[0];
+    } else if (trialingSubs.data.length > 0) {
+      resolvedSub = trialingSubs.data[0];
+    } else if (pastDueSubs.data.length > 0) {
+      resolvedSub = pastDueSubs.data[0];
     }
 
     const { data: dbSubscription, error: dbSubscriptionError } = await supabaseAdmin
@@ -164,14 +142,22 @@ serve(async (req) => {
 
     if (dbSubscriptionError) throw new HttpError(500, dbSubscriptionError.message);
 
+    const hasBillableSubscription = Boolean(resolvedSub);
     const syncPayload = {
       user_id: user.id,
-      status,
-      plan: plan ?? dbSubscription?.plan ?? "free",
+      status: resolvedSub?.status ?? "inactive",
+      plan: normalizePlan(
+        resolvedSub?.metadata?.plan ?? dbSubscription?.plan ?? null,
+        hasBillableSubscription ? "standard" : "free",
+      ),
       stripe_customer_id: customerId,
-      stripe_subscription_id: stripeSubscriptionId,
-      current_period_start: subscriptionStart,
-      current_period_end: subscriptionEnd,
+      stripe_subscription_id: resolvedSub?.id ?? null,
+      current_period_start: resolvedSub
+        ? new Date(resolvedSub.current_period_start * 1000).toISOString()
+        : null,
+      current_period_end: resolvedSub
+        ? new Date(resolvedSub.current_period_end * 1000).toISOString()
+        : null,
       updated_at: new Date().toISOString(),
     };
 
@@ -190,24 +176,23 @@ serve(async (req) => {
       if (insertError) throw new HttpError(500, insertError.message);
     }
 
-    logStep("Subscription synced to DB", { userId: user.id, status, plan });
-
-    return new Response(JSON.stringify({
-      subscribed: hasActiveSub,
-      plan,
-      status,
-      subscription_end: subscriptionEnd,
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
+    logger.done("subscription.synced", {
+      subscribed: hasBillableSubscription,
+      status: resolvedSub?.status ?? "inactive",
+      plan: syncPayload.plan,
     });
+
+    return jsonResponse({
+      subscribed: hasBillableSubscription,
+      plan: hasBillableSubscription ? syncPayload.plan : null,
+      status: resolvedSub?.status ?? "inactive",
+      subscription_end: syncPayload.current_period_end,
+    }, 200, RESPONSE_CACHE_HEADERS, req);
   } catch (error) {
     const status = error instanceof HttpError ? error.status : 500;
     const errorMessage = error instanceof Error ? error.message : String(error);
-    logStep("ERROR", { status, message: errorMessage });
-    return new Response(JSON.stringify({ error: errorMessage }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status,
-    });
+    logger.fail("subscription.sync_failed", { status, message: errorMessage });
+
+    return jsonResponse({ error: errorMessage }, status, {}, req);
   }
 });

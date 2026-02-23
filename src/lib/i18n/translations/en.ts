@@ -68,9 +68,16 @@ export interface Translations {
     subtitle: string;
     trial: string;
     perMonth: string;
-    starter: { name: string; price: string; description: string; features: string[]; cta: string };
-    pro: { name: string; price: string; description: string; popular: string; features: string[]; cta: string };
-    enterprise: { name: string; price: string; description: string; features: string[]; cta: string };
+    billedAnnually: string;
+    standard: {
+      name: string;
+      price: string;
+      annualPrice: string;
+      description: string;
+      badge: string;
+      features: string[];
+      cta: string;
+    };
   };
   auth: {
     welcomeBack: string;
@@ -250,13 +257,13 @@ export const en: Translations = {
     logout: 'Logout',
   },
   landing: {
-    badge: 'Your Autonomous CFO',
-    headline: "Know what your SaaS is worth — and where it's headed.",
-    subheadline: 'Stripe-first. Get VC-ready metrics: Net New MRR, Expansion, Churn, 3/6/12-month forecasts, valuation & equity pricing. No spreadsheets.',
+    badge: 'Your Autonomous CFO for fundraising',
+    headline: "Turn SaaS metrics into confidence for your next investor conversation.",
+    subheadline: 'Connect Stripe with a read-only key or start with demo/manual/CSV input. Track Net New MRR, Expansion, Churn, 3/6/12-month forecasts, valuation, and equity pricing in one investor-ready dashboard.',
     cta: {
-      primary: 'Start 3-day free trial',
+      primary: 'Start my investor-ready trial',
       secondary: 'View demo data',
-      disclaimer: 'Read-only access. Cancel anytime.',
+      disclaimer: 'No card required for trial. Cancel anytime.',
     },
     features: {
       title: 'VC-ready metrics, built for founders',
@@ -271,18 +278,18 @@ export const en: Translations = {
       },
       valuation: {
         title: 'Valuation & Equity Pricing',
-        description: 'Calculate your startup valuation using growth-based multiples. Price equity stakes at 5%, 10%, 20%.',
+        description: 'Calculate valuation with growth-based multiples and estimate stake value plus implied share price.',
       },
       reports: {
         title: 'Investor Pack (Reports)',
-        description: 'Generate investor-ready reports with one click. Perfect for board meetings and fundraising.',
+        description: 'Export investor-ready summaries (CSV/PDF) with one click. Perfect for board meetings and fundraising.',
       },
     },
     howItWorks: {
       title: 'How it works',
-      step1: { title: 'Connect revenue source', description: 'Stripe-first, or use Demo mode / manual entry.' },
+      step1: { title: 'Connect revenue source', description: 'Stripe-first, or start with Demo mode, manual entry, or CSV import.' },
       step2: { title: 'We compute VC-ready metrics', description: 'MRR breakdown, growth rates, and forecasts.' },
-      step3: { title: 'Get investor insights', description: 'Valuation, equity pricing, and reports.' },
+      step3: { title: 'Get investor insights', description: 'Valuation, stake/share pricing, and exportable summaries.' },
     },
     preview: { title: 'Product Preview', dashboard: 'Dashboard View', valuation: 'Valuation & Forecast' },
     security: {
@@ -295,37 +302,32 @@ export const en: Translations = {
   },
   pricing: {
     title: 'Simple, transparent pricing',
-    subtitle: '3-day free trial for all plans. Cancel anytime.',
+    subtitle: 'One plan. 3-day free trial. Cancel anytime.',
     trial: '3-day free trial',
     perMonth: '/month',
-    starter: {
-      name: 'Starter',
-      price: '$29',
-      description: 'For early-stage founders',
-      features: ['Core metrics (MRR/ARR/Growth)', 'Basic valuation calculator', 'Dashboard & charts', 'Manual + CSV import', 'Email support'],
+    billedAnnually: 'Billed annually',
+    standard: {
+      name: 'Standard',
+      price: '$39',
+      annualPrice: '$468',
+      description: 'For SaaS founders who need investor-ready metrics',
+      badge: 'Standard Plan',
+      features: [
+        'Core metrics (MRR/ARR/Growth)',
+        'Net New MRR, expansion, contraction, and churn views',
+        'Autonomous CFO forecasts (3/6/12m)',
+        'Valuation scenarios and equity/share pricing',
+        'Investor Pack export (CSV/PDF)',
+        'Stripe revenue sync + manual/CSV input',
+      ],
       cta: 'Start free trial',
-    },
-    pro: {
-      name: 'Pro',
-      price: '$59',
-      description: 'For growth-stage startups',
-      popular: 'Most Popular',
-      features: ['Everything in Starter', 'Autonomous CFO forecasts (3/6/12m)', 'Valuation scenarios', 'Equity pricing calculator', 'Export reports & data', 'Priority support'],
-      cta: 'Start free trial',
-    },
-    enterprise: {
-      name: 'Enterprise',
-      price: 'Custom',
-      description: 'For larger organizations',
-      features: ['Everything in Pro', 'Multi-company support', 'API access', 'Custom integrations', 'Dedicated support', 'SSO & advanced security'],
-      cta: 'Contact sales',
     },
   },
   auth: {
     welcomeBack: 'Welcome back',
     createAccount: 'Create account',
-    loginSubtitle: 'Sign in to access your metrics',
-    signupSubtitle: 'Start tracking your SaaS metrics',
+    loginSubtitle: 'Access your investor-ready dashboard and growth metrics',
+    signupSubtitle: 'Create your account and structure your SaaS narrative in minutes',
     fullName: 'Full name',
     email: 'Email',
     password: 'Password',
@@ -458,8 +460,8 @@ export const en: Translations = {
   onboarding: {
     title: 'Initial Setup',
     step1: { title: 'About your Startup', subtitle: 'Set up company name and base currency', companyName: 'Company Name', companyPlaceholder: 'My Startup', baseCurrency: 'Base Currency' },
-    step2: { title: 'Data Source', subtitle: 'How will you add your metrics?', manual: 'Manual Entry', manualDescription: 'Add data manually through the dashboard', csv: 'CSV Import', csvDescription: 'Import data via CSV files', stripe: 'Stripe (Beta)', stripeDescription: 'Connect Stripe to sync automatically', tip: '💡 You can connect payment gateways later in Settings.' },
-    step3: { title: 'All Set!', subtitle: 'Review your settings', companyLabel: 'Company', currencyLabel: 'Currency', dataSourceLabel: 'Data Source', demoTip: '🎯 Want to explore first? Enable Demo Mode to see sample metrics.', useDemoMode: 'Use Demo Mode' },
+    step2: { title: 'Data Source', subtitle: 'How will you add your metrics?', manual: 'Manual Entry', manualDescription: 'Add data manually through the dashboard', csv: 'CSV Import', csvDescription: 'Import data via CSV files', stripe: 'Stripe (Beta)', stripeDescription: 'Connect Stripe to sync recurring revenue snapshots automatically.', tip: 'Use a restricted read-only key and sync from Settings at any time.' },
+    step3: { title: 'All Set!', subtitle: 'Review your settings', companyLabel: 'Company', currencyLabel: 'Currency', dataSourceLabel: 'Data Source', demoTip: 'Want to explore first? Enable Demo Mode to see sample metrics.', useDemoMode: 'Use Demo Mode' },
   },
   timeframe: { '30d': 'Last 30 days', '90d': 'Last 90 days', '12m': 'Last 12 months', all: 'All time' },
   currencies: { USD: 'US Dollar ($)', EUR: 'Euro (€)', GBP: 'British Pound (£)', BRL: 'Brazilian Real (R$)' },

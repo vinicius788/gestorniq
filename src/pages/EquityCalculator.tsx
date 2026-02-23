@@ -21,15 +21,18 @@ export default function EquityCalculator() {
   const { isDemoMode } = useApp();
   const [selectedPercentage, setSelectedPercentage] = useState(10);
   const [customPercentage, setCustomPercentage] = useState("");
+  const [totalShares, setTotalShares] = useState("10000000");
 
   const currency = (company?.currency || 'USD') as Currency;
   const activePercentage = customPercentage ? parseFloat(customPercentage) : selectedPercentage;
+  const parsedShares = Math.max(0, parseInt(totalShares.replace(/[^\d]/g, ""), 10) || 0);
   
   const { value: equityValue, usedValuation } = calculateEquityValue(
     metrics.valuation,
     metrics.arr,
     activePercentage
   );
+  const sharePrice = parsedShares > 0 ? usedValuation / parsedShares : null;
 
   if (loading) {
     return (
@@ -117,6 +120,26 @@ export default function EquityCalculator() {
             <div className="text-2xl font-bold text-foreground">
               {hasData ? <MoneyValue value={usedValuation} currency={currency} abbreviate size="2xl" /> : '—'}
             </div>
+          </div>
+
+          <div className="p-4 rounded-lg bg-muted/50 border border-border">
+            <label className="text-sm font-medium text-muted-foreground mb-2 block">
+              Total diluted shares outstanding
+            </label>
+            <input
+              type="number"
+              value={totalShares}
+              onChange={(e) => setTotalShares(e.target.value)}
+              min="1"
+              step="1"
+              className="w-full h-12 rounded-lg border border-border bg-background px-4 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary tabular-nums"
+            />
+            <p className="mt-3 text-sm text-muted-foreground">
+              Implied share price:{" "}
+              <span className="font-semibold text-foreground">
+                {hasData ? <MoneyValue value={sharePrice} currency={currency} size="sm" /> : "—"}
+              </span>
+            </p>
           </div>
         </div>
 

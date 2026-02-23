@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
+import { useState, useEffect, useCallback, createContext, useContext, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCompany } from './useCompany';
 
@@ -43,7 +43,7 @@ export function TrialProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchTrialAndSubscription = async () => {
+  const fetchTrialAndSubscription = useCallback(async () => {
     if (!company) {
       setTrial(null);
       setSubscription(null);
@@ -101,13 +101,13 @@ export function TrialProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [company]);
 
   useEffect(() => {
     if (!companyLoading) {
-      fetchTrialAndSubscription();
+      void fetchTrialAndSubscription();
     }
-  }, [company, companyLoading]);
+  }, [companyLoading, fetchTrialAndSubscription]);
 
   // Calculate days remaining
   const daysRemaining = trial 

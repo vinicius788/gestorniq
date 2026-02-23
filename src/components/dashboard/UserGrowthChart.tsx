@@ -1,86 +1,72 @@
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { UserPlus2, Users } from "lucide-react";
 import { useMetrics } from "@/hooks/useMetrics";
 import { formatNumber } from "@/lib/format";
+import { ChartCard } from "@/components/ui/chart-card";
 
 export function UserGrowthChart() {
-  const { userMetrics } = useMetrics();
+  const { filteredUserMetrics, loading } = useMetrics();
 
-  // Prepare chart data (sort by date ascending)
-  const chartData = [...userMetrics]
+  const chartData = [...filteredUserMetrics]
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    .slice(-12) // Last 12 points
-    .map(metric => ({
-      month: new Date(metric.date).toLocaleDateString('en-US', { month: 'short' }),
+    .slice(-12)
+    .map((metric) => ({
+      month: new Date(metric.date).toLocaleDateString("en-US", { month: "short" }),
       users: metric.total_users,
       newUsers: metric.new_users,
     }));
 
-  if (chartData.length === 0) {
-    return (
-      <div className="metric-card overflow-hidden">
-        <div className="mb-4 md:mb-6">
-          <h3 className="text-base md:text-lg font-semibold text-foreground">User Growth</h3>
-          <p className="text-xs md:text-sm text-muted-foreground">Total users and new signups</p>
-        </div>
-        <div className="h-[200px] sm:h-[250px] md:h-[300px] flex items-center justify-center">
-          <p className="text-muted-foreground">No data to display</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="metric-card overflow-hidden">
-      <div className="mb-4 md:mb-6">
-        <h3 className="text-base md:text-lg font-semibold text-foreground">User Growth</h3>
-        <p className="text-xs md:text-sm text-muted-foreground">Total users over time</p>
-      </div>
-      <div className="h-[200px] sm:h-[250px] md:h-[300px] -mx-2 sm:mx-0">
+    <ChartCard
+      title="User Base Trend"
+      description="Total users and new users over time."
+      icon={Users}
+      loading={loading}
+      isEmpty={chartData.length === 0}
+      emptyIcon={UserPlus2}
+      emptyTitle="No user history yet"
+      emptyDescription="Add user metrics to unlock growth visuals and trend analysis."
+    >
+      <div className="h-[280px]">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+          <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -22, bottom: 4 }}>
             <defs>
               <linearGradient id="userGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="hsl(173 80% 40%)" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="hsl(173 80% 40%)" stopOpacity={0} />
+                <stop offset="6%" stopColor="hsl(var(--chart-2))" stopOpacity={0.34} />
+                <stop offset="100%" stopColor="hsl(var(--chart-2))" stopOpacity={0.02} />
               </linearGradient>
             </defs>
-            <XAxis 
-              dataKey="month" 
+            <XAxis
+              dataKey="month"
               axisLine={false}
               tickLine={false}
-              tick={{ fill: 'hsl(215 20% 55%)', fontSize: 10 }}
-              interval="preserveStartEnd"
+              tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
             />
-            <YAxis 
+            <YAxis
               axisLine={false}
               tickLine={false}
-              tick={{ fill: 'hsl(215 20% 55%)', fontSize: 10 }}
-              width={50}
-              tickFormatter={(value) => value >= 1000 ? `${(value/1000).toFixed(0)}k` : value.toString()}
+              tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
+              width={56}
+              tickFormatter={(value) => (value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value.toString())}
             />
-            <Tooltip 
-              contentStyle={{ 
-                backgroundColor: 'hsl(222 47% 8%)',
-                border: '1px solid hsl(217 33% 17%)',
-                borderRadius: '8px',
-                color: 'hsl(210 40% 98%)',
-                fontSize: '12px'
+            <Tooltip
+              cursor={{ stroke: "hsl(var(--border))", strokeWidth: 1 }}
+              contentStyle={{
+                backgroundColor: "hsl(var(--popover))",
+                border: "1px solid hsl(var(--border))",
+                borderRadius: "12px",
+                color: "hsl(var(--popover-foreground))",
+                fontSize: "12px",
               }}
               formatter={(value: number, name: string) => [
-                formatNumber(value, 'en-US'), 
-                name === 'users' ? 'Total Users' : 'New Users'
+                formatNumber(value, "en-US"),
+                name === "users" ? "Total Users" : "New Users",
               ]}
             />
-            <Area
-              type="monotone"
-              dataKey="users"
-              stroke="hsl(173 80% 40%)"
-              strokeWidth={2}
-              fill="url(#userGradient)"
-            />
+            <Area type="monotone" dataKey="users" stroke="hsl(var(--chart-2))" strokeWidth={2.5} fill="url(#userGradient)" />
           </AreaChart>
         </ResponsiveContainer>
       </div>
-    </div>
+    </ChartCard>
   );
 }

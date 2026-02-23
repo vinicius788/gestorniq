@@ -11,7 +11,7 @@ export default function Terms() {
         </Button>
 
         <h1 className="text-3xl font-bold text-foreground mb-2">Terms of Service</h1>
-        <p className="text-sm text-muted-foreground mb-8">Last updated: February 10, 2026</p>
+        <p className="text-sm text-muted-foreground mb-8">Last updated: February 19, 2026</p>
 
         <div className="prose prose-invert max-w-none space-y-6 text-muted-foreground">
           <section>
@@ -21,7 +21,7 @@ export default function Terms() {
 
           <section>
             <h2 className="text-xl font-semibold text-foreground">2. Description of Service</h2>
-            <p>GestorNiq is a SaaS metrics platform that provides revenue tracking, valuation estimates, and financial analytics for startups. The Service offers a 3-day free trial followed by paid subscription plans.</p>
+            <p>GestorNiq is a SaaS metrics platform that provides revenue tracking, valuation estimates, and financial analytics for startups. The Service offers a 3-day free trial followed by a paid Standard subscription.</p>
           </section>
 
           <section>
@@ -31,7 +31,7 @@ export default function Terms() {
 
           <section>
             <h2 className="text-xl font-semibold text-foreground">4. Billing and Subscriptions</h2>
-            <p>Paid plans are billed monthly via Stripe. You can cancel at any time through the customer portal. Cancellations take effect at the end of the current billing period. No refunds are provided for partial months.</p>
+            <p>The Standard subscription is billed annually via Stripe at the published annual rate (equivalent to $39/month). You can cancel at any time through the customer portal. Cancellations take effect at the end of the current billing period.</p>
           </section>
 
           <section>
