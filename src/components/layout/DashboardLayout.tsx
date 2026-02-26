@@ -15,6 +15,7 @@ import { AppShell } from "./AppShell";
 function DashboardContent() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isBootstrappingDemo, setIsBootstrappingDemo] = useState(false);
+  const [workspaceAction, setWorkspaceAction] = useState<'create' | 'recover' | null>(null);
   const { company, loading: companyLoading, error: companyError, updateCompany, ensureCompany } = useCompany();
   const { showOnboarding, setShowOnboarding, setOnboardingComplete, setDemoMode } = useApp();
   const { user, loading } = useAuth();
@@ -127,6 +128,7 @@ function DashboardContent() {
   }
 
   if (!companyLoading && !company) {
+    const isWorkspaceBusy = companyLoading || workspaceAction !== null;
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-4">
         <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 text-center space-y-4">
@@ -137,13 +139,38 @@ function DashboardContent() {
           {companyError && (
             <p className="text-xs text-destructive">{companyError}</p>
           )}
-          <button
-            type="button"
-            className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-            onClick={() => ensureCompany()}
-          >
-            Recover workspace
-          </button>
+          <div className="flex flex-col gap-3">
+            <button
+              type="button"
+              className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+              disabled={isWorkspaceBusy}
+              onClick={async () => {
+                setWorkspaceAction('create');
+                try {
+                  await ensureCompany();
+                } finally {
+                  setWorkspaceAction(null);
+                }
+              }}
+            >
+              {workspaceAction === 'create' ? 'Creating workspace...' : 'Create workspace'}
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-10 items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground hover:bg-accent disabled:opacity-60"
+              disabled={isWorkspaceBusy}
+              onClick={async () => {
+                setWorkspaceAction('recover');
+                try {
+                  await ensureCompany();
+                } finally {
+                  setWorkspaceAction(null);
+                }
+              }}
+            >
+              {workspaceAction === 'recover' ? 'Recovering workspace...' : 'Recover workspace'}
+            </button>
+          </div>
         </div>
       </div>
     );

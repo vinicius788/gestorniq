@@ -160,6 +160,17 @@ export function useMetrics() {
   const filteredUserMetrics = filterByTimeframe(userMetrics, timeframe);
   const filteredValuationSnapshots = filterByTimeframe(valuationSnapshots, timeframe);
 
+  const toMetricsWriteError = (error: unknown) => {
+    if (error instanceof Error) {
+      const message = error.message.toLowerCase();
+      if (message.includes('row-level security') || message.includes('permission denied')) {
+        return new Error('Access blocked. An active trial or subscription is required to import data.');
+      }
+      return error;
+    }
+    return new Error('Failed to save metrics data.');
+  };
+
   // Add revenue snapshot.
   const addRevenueSnapshot = async (data: RevenueSnapshotInput) => {
     if (isDemoMode) {
@@ -176,7 +187,7 @@ export function useMetrics() {
         ...payload,
       }, { onConflict: 'company_id,date' });
 
-    if (error) throw error;
+    if (error) throw toMetricsWriteError(error);
     await fetchMetrics();
   };
 
@@ -196,7 +207,7 @@ export function useMetrics() {
       .from('revenue_snapshots')
       .upsert(payload, { onConflict: 'company_id,date' });
 
-    if (error) throw error;
+    if (error) throw toMetricsWriteError(error);
     await fetchMetrics();
   };
 
@@ -216,7 +227,7 @@ export function useMetrics() {
         ...payload,
       }, { onConflict: 'company_id,date' });
 
-    if (error) throw error;
+    if (error) throw toMetricsWriteError(error);
     await fetchMetrics();
   };
 
@@ -236,7 +247,7 @@ export function useMetrics() {
       .from('user_metrics')
       .upsert(payload, { onConflict: 'company_id,date' });
 
-    if (error) throw error;
+    if (error) throw toMetricsWriteError(error);
     await fetchMetrics();
   };
 

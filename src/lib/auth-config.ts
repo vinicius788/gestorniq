@@ -4,8 +4,8 @@ const clerkPublishableKey =
 
 const rawClerkOnlyMode = import.meta.env.VITE_CLERK_ONLY_MODE === 'true';
 
-// Clerk-only mode is development-only because production data access depends on Supabase RLS.
-export const CLERK_ONLY_MODE = rawClerkOnlyMode && import.meta.env.DEV;
+// Clerk-only mode is deprecated because data access requires a Supabase session bridge.
+export const CLERK_ONLY_MODE = false;
 
 export const AUTH_CONFIG = {
   clerkPublishableKey,
@@ -27,9 +27,9 @@ export const AUTH_PROVIDER = AUTH_CONFIG.isClerkEnabled
 export function getAuthConfigWarnings(): string[] {
   const warnings: string[] = [];
 
-  if (AUTH_CONFIG.rawClerkOnlyMode && !import.meta.env.DEV) {
+  if (AUTH_CONFIG.rawClerkOnlyMode) {
     warnings.push(
-      'VITE_CLERK_ONLY_MODE=true is ignored outside development. Production requires Clerk->Supabase session bridge.',
+      'VITE_CLERK_ONLY_MODE=true is ignored. Clerk -> Supabase session bridge is always required.',
     );
   }
 

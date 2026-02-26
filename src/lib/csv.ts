@@ -36,6 +36,29 @@ function detectDelimiter(headerLine: string): string {
   return semicolonCount > commaCount ? ';' : ',';
 }
 
+function normalizeHeader(header: string): string {
+  return header
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function applyHeaderAliases(header: string): string {
+  const aliases: Record<string, string> = {
+    newmrr: 'new_mrr',
+    expansionmrr: 'expansion_mrr',
+    churnedmrr: 'churned_mrr',
+    totalusers: 'total_users',
+    newusers: 'new_users',
+    activeusers: 'active_users',
+    churnedusers: 'churned_users',
+    users: 'total_users',
+  };
+
+  return aliases[header] ?? header;
+}
+
 export function parseCsv(text: string): Array<Record<string, string>> {
   const normalized = text.replace(/\r\n?/g, '\n').trim();
   if (!normalized) return [];
@@ -48,7 +71,9 @@ export function parseCsv(text: string): Array<Record<string, string>> {
   if (lines.length <= 1) return [];
 
   const delimiter = detectDelimiter(lines[0]);
-  const headers = splitCsvLine(lines[0], delimiter).map((header) => header.toLowerCase());
+  const headers = splitCsvLine(lines[0], delimiter).map((header) =>
+    applyHeaderAliases(normalizeHeader(header)),
+  );
 
   return lines.slice(1).map((line) => {
     const columns = splitCsvLine(line, delimiter);

@@ -521,9 +521,9 @@ function ClerkAuthProviderImpl({ children }: { children: ReactNode }) {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  if (AUTH_CONFIG.rawClerkOnlyMode && !import.meta.env.DEV) {
-    console.error(
-      'VITE_CLERK_ONLY_MODE=true is ignored outside development. Clerk -> Supabase bridge will be used.',
+  if (AUTH_CONFIG.rawClerkOnlyMode) {
+    console.warn(
+      'VITE_CLERK_ONLY_MODE=true is ignored. Clerk -> Supabase bridge will be used.',
     );
   }
 

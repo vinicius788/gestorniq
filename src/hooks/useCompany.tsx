@@ -27,58 +27,85 @@ interface CompanyContextType {
 
 const CompanyContext = createContext<CompanyContextType | undefined>(undefined);
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const isUuid = (value: string) => UUID_REGEX.test(value);
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    const maybeError = error as {
+      message?: unknown;
+      details?: unknown;
+      hint?: unknown;
+    };
+
+    if (typeof maybeError.message === 'string' && maybeError.message) {
+      return maybeError.message;
+    }
+
+    if (typeof maybeError.details === 'string' && maybeError.details) {
+      return maybeError.details;
+    }
+
+    if (typeof maybeError.hint === 'string' && maybeError.hint) {
+      return maybeError.hint;
+    }
+  }
+
+  return fallback;
+};
+
 export function CompanyProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const ensureCompany = useCallback(async () => {
-    if (!user) return null;
+  const recoverCompany = useCallback(async (): Promise<Company | null> => {
+    const { data: ensuredByRpc, error: ensureError } = await supabase.rpc('ensure_company_for_current_user');
 
-    const { data, error: ensureError } = await supabase.rpc('ensure_company_for_current_user');
-    if (ensureError) throw ensureError;
+    if (ensureError) {
+      throw new Error(getErrorMessage(ensureError, 'Workspace recovery failed.'));
+    }
 
-    return (data as Company | null) ?? null;
-  }, [user]);
+    return (ensuredByRpc as Company | null) ?? null;
+  }, []);
 
-  const fetchCompany = useCallback(async () => {
+  const syncCompany = useCallback(async (): Promise<Company | null> => {
     if (!user) {
       setCompany(null);
+      setError(null);
       setLoading(false);
-      return;
+      return null;
     }
 
     try {
       setLoading(true);
-      const { data, error: fetchError } = await supabase
-        .from('companies')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-
-      if (fetchError) throw fetchError;
-      if (data) {
-        setCompany(data);
-        setError(null);
-        return;
-      }
-
-      const ensuredCompany = await ensureCompany();
-      setCompany(ensuredCompany);
+      const resolvedCompany = await recoverCompany();
+      setCompany(resolvedCompany);
       setError(null);
+      return resolvedCompany;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch company');
+      setError(getErrorMessage(err, 'Failed to fetch company'));
       setCompany(null);
+      return null;
     } finally {
       setLoading(false);
     }
-  }, [ensureCompany, user]);
+  }, [recoverCompany, user]);
+
+  const ensureCompany = useCallback(async () => syncCompany(), [syncCompany]);
+
+  const fetchCompany = useCallback(async () => {
+    await syncCompany();
+  }, [syncCompany]);
 
   useEffect(() => {
-    fetchCompany();
+    void fetchCompany();
   }, [fetchCompany]);
 
   const updateCompany = async (updates: Partial<Company>) => {

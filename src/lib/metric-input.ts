@@ -84,6 +84,21 @@ function assertNonNegative(value: number, fieldName: string): void {
   }
 }
 
+function normalizeDateInput(raw: string): string {
+  const trimmed = raw.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  const dayFirstMatch = /^(\d{2})[/-](\d{2})[/-](\d{4})$/.exec(trimmed);
+  if (dayFirstMatch) {
+    const [, day, month, year] = dayFirstMatch;
+    return `${year}-${month}-${day}`;
+  }
+
+  return trimmed;
+}
+
 function assertValidDate(date: string): void {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     throw new Error('Date must use YYYY-MM-DD format');
@@ -103,7 +118,8 @@ export function normalizeRevenueSnapshotInput(input: RevenueSnapshotInput): {
   churned_mrr: number;
   source: string;
 } {
-  assertValidDate(input.date);
+  const normalizedDate = normalizeDateInput(input.date);
+  assertValidDate(normalizedDate);
 
   const mrr = round2(parseNumericValue(input.mrr, 'MRR'));
   const newMrr = round2(parseNumericValue(input.new_mrr, 'New MRR'));
@@ -116,7 +132,7 @@ export function normalizeRevenueSnapshotInput(input: RevenueSnapshotInput): {
   assertNonNegative(churnedMrr, 'Churned MRR');
 
   return {
-    date: input.date,
+    date: normalizedDate,
     mrr,
     new_mrr: newMrr,
     expansion_mrr: expansionMrr,
@@ -133,7 +149,8 @@ export function normalizeUserMetricInput(input: UserMetricInput): {
   churned_users: number;
   source: string;
 } {
-  assertValidDate(input.date);
+  const normalizedDate = normalizeDateInput(input.date);
+  assertValidDate(normalizedDate);
 
   const totalUsers = parseIntegerValue(input.total_users, 'Total users');
   const newUsers = parseIntegerValue(input.new_users, 'New users');
@@ -154,7 +171,7 @@ export function normalizeUserMetricInput(input: UserMetricInput): {
   }
 
   return {
-    date: input.date,
+    date: normalizedDate,
     total_users: totalUsers,
     new_users: newUsers,
     active_users: activeUsers,
