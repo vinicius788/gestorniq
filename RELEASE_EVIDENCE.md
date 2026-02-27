@@ -70,6 +70,17 @@ SQL verification snippets:
 -- 3) plaintext guard trigger on stripe_connections
 ```
 
+## Restore drill evidence (required before GO)
+Command:
+```bash
+npm run ops:db-restore-drill -- --env staging
+```
+Evidence:
+- Restore point timestamp:
+- RTO:
+- RPO:
+- Validation SQL/log output:
+
 ## Stripe webhook evidence
 - Endpoint URL:
 - Endpoint ID:

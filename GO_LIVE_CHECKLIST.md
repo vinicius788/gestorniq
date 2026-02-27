@@ -78,10 +78,12 @@ Validate:
 - [ ] `write_audit_log` not executable by `authenticated`.
 - [ ] `subscriptions` indexes exist for `stripe_customer_id` and `stripe_subscription_id`.
 - [ ] Plaintext guard trigger exists on `stripe_connections`.
+- [ ] Staging restore drill executed (no guaranteed down migration for `20260220100000_phase_a_launch_blockers.sql`; rollback strategy is restore).
 
 Evidence:
 - [ ] `supabase db push` output pasted.
 - [ ] SQL verification output pasted (`\df+ write_audit_log`, index list, trigger list).
+- [ ] Restore drill evidence attached (RTO/RPO + restore point timestamp).
 
 ## 4) Stripe configuration
 Validate:

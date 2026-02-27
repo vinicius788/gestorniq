@@ -21,6 +21,7 @@ npm run test
 npm run build
 npm run security:scan-secrets
 npm run ops:healthcheck
+npm run ops:db-restore-drill -- --env staging
 npm run ci:check
 npm run audit:high
 ```
