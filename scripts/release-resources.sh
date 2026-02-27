@@ -144,6 +144,15 @@ resolve_supabase_project_ref() {
   return 1
 }
 
+resolve_linked_supabase_project_ref() {
+  if [[ -f "supabase/.temp/project-ref" ]]; then
+    tr -d '\r\n[:space:]' < "supabase/.temp/project-ref"
+    return 0
+  fi
+
+  return 1
+}
+
 print_list() {
   local title="$1"
   shift
