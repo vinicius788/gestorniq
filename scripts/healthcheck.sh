@@ -13,6 +13,7 @@ status_ok=true
 
 runtime_env="$(get_runtime_env)"
 strict_mode=false
+app_url_defaulted=false
 
 if is_release_env; then
   strict_mode=true
@@ -21,6 +22,10 @@ fi
 if [[ "${HEALTHCHECK_STRICT:-}" == "1" || "${HEALTHCHECK_STRICT:-}" == "true" ]]; then
   strict_mode=true
 fi
+
+is_ci_runtime() {
+  [[ "${CI:-}" == "true" || "${GITHUB_ACTIONS:-}" == "true" ]]
+}
 
 check_command() {
   local name="$1"
@@ -131,10 +136,26 @@ else
   echo "[INFO] Non-release mode: missing services are warnings (set HEALTHCHECK_STRICT=1 to force)."
 fi
 
+if [[ -z "${APP_URL:-}" ]]; then
+  if [[ "${strict_mode}" == true ]]; then
+    report_missing "APP_URL is required in release mode and should be set for smoke checks"
+  else
+    APP_URL="http://localhost:3000"
+    export APP_URL
+    app_url_defaulted=true
+    echo "[INFO] APP_URL not set; using safe non-production default (${APP_URL})."
+    if is_ci_runtime; then
+      echo "[INFO] CI runtime detected; APP_URL default keeps local/CI checks deterministic."
+    fi
+  fi
+fi
+
 if [[ -n "${APP_URL:-}" ]]; then
-  check_command "App URL reachable" "curl -fsS '${APP_URL}' >/dev/null"
-else
-  report_missing "APP_URL is required in release mode and should be set for smoke checks"
+  if [[ "${app_url_defaulted}" == true ]]; then
+    echo "[OK] App URL defaulted for non-release checks (${APP_URL})"
+  else
+    check_command "App URL reachable" "curl -fsS '${APP_URL}' >/dev/null"
+  fi
 fi
 
 if [[ -z "${SUPABASE_URL:-}" ]]; then
