@@ -52,9 +52,21 @@ export const getRuntimeEnvironment = () =>
     .toLowerCase()
     .trim();
 
+const RELEASE_RUNTIME_ENVIRONMENTS = new Set([
+  "production",
+  "prod",
+  "staging",
+  "stage",
+  "release",
+]);
+
+const isCiRuntime = () =>
+  (Deno.env.get("CI") ?? "").toLowerCase() === "true" ||
+  (Deno.env.get("GITHUB_ACTIONS") ?? "").toLowerCase() === "true";
+
 export const isProductionRuntime = () => {
   const env = getRuntimeEnvironment();
-  return env === "production" || env === "prod" || Boolean(Deno.env.get("DENO_DEPLOYMENT_ID"));
+  return RELEASE_RUNTIME_ENVIRONMENTS.has(env) || Boolean(Deno.env.get("DENO_DEPLOYMENT_ID"));
 };
 
 const getConfiguredCorsOrigins = (): string[] => {
@@ -133,6 +145,17 @@ export const getBaseUrl = (
     return siteUrl.replace(/\/$/, "");
   }
 
+  if (!isProductionRuntime()) {
+    const fallbackUrl = "http://localhost:3000";
+    log("Missing APP_URL/SITE_URL in non-production, using safe local default", {
+      runtime: getRuntimeEnvironment(),
+      origin: req.headers.get("origin"),
+      ci: isCiRuntime(),
+      fallback_url: fallbackUrl,
+    });
+    return fallbackUrl;
+  }
+
   if (isProductionRuntime()) {
     log("Missing APP_URL in production", {
       runtime: getRuntimeEnvironment(),
@@ -140,12 +163,6 @@ export const getBaseUrl = (
     });
     throw new HttpError(500, "APP_URL must be configured in production");
   }
-
-  log("Missing APP_URL/SITE_URL in non-production", {
-    runtime: getRuntimeEnvironment(),
-    origin: req.headers.get("origin"),
-  });
-  throw new HttpError(500, "APP_URL or SITE_URL must be configured");
 };
 
 export const jsonResponse = (

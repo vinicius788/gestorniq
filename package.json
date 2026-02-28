@@ -14,6 +14,7 @@
     "security:scan-secrets": "bash scripts/scan-secrets.sh",
     "security:scan-secrets:strict": "SCAN_ENV_POLICY=1 bash scripts/scan-secrets.sh",
     "ops:healthcheck": "bash scripts/healthcheck.sh",
+    "ops:db-restore-drill": "bash scripts/db-restore-drill.sh",
     "supabase:db:push": "bash scripts/supabase-db-push.sh",
     "supabase:deploy": "bash scripts/supabase-deploy.sh",
     "supabase:provision": "bash scripts/supabase-provision.sh",

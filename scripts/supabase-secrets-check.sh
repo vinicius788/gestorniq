@@ -25,11 +25,49 @@ fi
 echo "[INFO] Runtime environment: ${runtime_env}"
 echo "[INFO] Checking Supabase secrets for project: ${project_ref}"
 
+linked_project_ref="$(resolve_linked_supabase_project_ref || true)"
+if [[ -z "${linked_project_ref}" ]]; then
+  echo "[WARN] No linked Supabase project found in this workspace."
+  echo "[HINT] Link the project with: supabase link --project-ref ${project_ref}"
+elif [[ "${linked_project_ref}" != "${project_ref}" ]]; then
+  echo "[WARN] Linked Supabase project (${linked_project_ref}) differs from target (${project_ref})."
+  echo "[HINT] Relink with: supabase link --project-ref ${project_ref}"
+fi
+
+print_failure_guidance() {
+  local cli_output="$1"
+
+  echo "[FAIL] Unable to list project secrets for ${project_ref}." >&2
+  echo "[DEBUG] supabase secrets list output:" >&2
+  echo "${cli_output}" >&2
+
+  if [[ -z "${SUPABASE_ACCESS_TOKEN:-}" ]]; then
+    echo "[HINT] SUPABASE_ACCESS_TOKEN is not set in the environment." >&2
+    echo "[HINT] Export it before running this check:" >&2
+    echo "       export SUPABASE_ACCESS_TOKEN=<token>" >&2
+    echo "[HINT] Or authenticate interactively: supabase login" >&2
+  fi
+
+  if printf '%s' "${cli_output}" | grep -Eqi 'not logged in|access token|unauthorized|status 401'; then
+    echo "[HINT] Supabase CLI authentication is missing/invalid." >&2
+    echo "[HINT] Run: supabase login" >&2
+  fi
+
+  if printf '%s' "${cli_output}" | grep -Eqi 'status 403|necessary privileges|forbidden|permission'; then
+    echo "[HINT] The authenticated account needs Owner/Admin privileges on project ${project_ref}." >&2
+  fi
+
+  if [[ -z "${linked_project_ref}" ]] || [[ "${linked_project_ref}" != "${project_ref}" ]]; then
+    echo "[HINT] Ensure local workspace is linked to the target project:" >&2
+    echo "       supabase link --project-ref ${project_ref}" >&2
+  fi
+}
+
 tmp_output="$(mktemp)"
 if ! supabase secrets list --project-ref "${project_ref}" >"${tmp_output}" 2>&1; then
-  cat "${tmp_output}" >&2
+  cli_error_output="$(cat "${tmp_output}")"
   rm -f "${tmp_output}"
-  echo "[FAIL] Unable to list project secrets." >&2
+  print_failure_guidance "${cli_error_output}"
   exit 1
 fi
 

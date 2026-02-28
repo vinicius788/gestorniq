@@ -21,6 +21,7 @@ npm run test
 npm run build
 npm run security:scan-secrets
 npm run ops:healthcheck
+npm run ops:db-restore-drill -- --env staging
 npm run ci:check
 npm run audit:high
 ```
@@ -34,6 +35,7 @@ APP_ENV=production npm run ops:healthcheck
 `ops:healthcheck` behavior:
 - `production/staging/release`: missing `APP_URL`, required functions, or required tables => hard fail.
 - local/dev: missing remote services are reported as warnings unless `HEALTHCHECK_STRICT=1`.
+- non-release checks default `APP_URL` to `http://localhost:3000` when unset, without relaxing release guardrails.
 
 ## Release automation
 One-command Supabase provisioning (migrations + edge functions + healthcheck):
@@ -82,6 +84,7 @@ Frontend variables:
 - `VITE_SUPABASE_PROJECT_ID`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
 - `VITE_SUPABASE_URL`
+- `VITE_SENTRY_DSN` (optional)
 - `VITE_CLERK_PUBLISHABLE_KEY` (if Clerk is enabled)
 - `VITE_CLERK_SUPABASE_JWT_TEMPLATE`
 
@@ -92,7 +95,7 @@ Supabase Edge Function secrets:
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
 - `STRIPE_PRICE_STANDARD_ANNUAL`
-- `APP_URL` (required in production)
+- `APP_URL` (required in production/staging/release)
 - `APP_ENV` (`production` in deployed environments)
 - `STRIPE_CONNECTIONS_ENCRYPTION_KEY` (base64 32-byte key)
 - `CORS_ALLOWED_ORIGINS` (optional comma-separated allowlist; defaults to `APP_URL`/`SITE_URL`)
