@@ -139,3 +139,58 @@ Moderate advisories tracked (non-blocking):
 - GO / CONDITIONAL GO / NO-GO:
 - Risks accepted:
 - Sign-off (engineering/product/security):
+
+---
+
+## Release Auditor Run (2026-02-28)
+
+### 1) Scope isolation gate (required)
+Commands executed:
+```bash
+git status --short --branch
+git stash push -m "audit-isolation-useAuth" -- src/hooks/useAuth.tsx
+git stash list | head -n 3
+git status --short --branch
+```
+
+Observed output summary:
+- Initial status was dirty due to out-of-scope local change: `M src/hooks/useAuth.tsx`.
+- Out-of-scope change was isolated in `stash@{0}: On main: audit-isolation-useAuth`.
+- Working tree became clean before running validation commands.
+
+Restore instruction (to avoid losing isolated work):
+```bash
+git stash pop stash@{0}
+```
+
+### 2) Executed commands and evidence
+
+| # | Command | Expected | Result | Evidence log |
+|---|---|---|---|---|
+| 1 | `npm run security:scan-secrets:strict` | PASS | PASS (`exit_code=0`) | `/tmp/release-audit/01-scan-secrets-strict.log` |
+| 2 | `PATH='/usr/bin:/bin' bash scripts/scan-secrets.sh` | PASS + fallback without `rg` | PASS (`exit_code=0`) | `/tmp/release-audit/02-scan-secrets-fallback.log` |
+| 3 | `npm run ci:check` | PASS | PASS (`exit_code=0`) | `/tmp/release-audit/03-ci-check.log` |
+| 4 | `APP_ENV=production APP_URL=https://example.com npm run release:preflight` | PASS | PASS (`exit_code=0`) | `/tmp/release-audit/04-preflight-prod-with-app-url.log` |
+| 5 | `APP_ENV=production APP_URL='' npm run release:preflight` | FAIL with clear message | PASS (expected FAIL occurred, `exit_code=1`) | `/tmp/release-audit/05-preflight-prod-missing-app-url.log` |
+| 6 | `CI=true APP_ENV=development APP_URL='' npm run ops:healthcheck` | PASS | PASS (`exit_code=0`) | `/tmp/release-audit/06-healthcheck-ci-nonprod.log` |
+| 7 | `bash scripts/db-restore-drill.sh --env staging --evidence-file /tmp/restore-drill-evidence.md` | PASS | PASS (`exit_code=0`) | `/tmp/release-audit/07-db-restore-drill-staging.log` |
+| 8 | `bash scripts/db-restore-drill.sh --env production` (without `--yes`) | FAIL safety guard | PASS (expected FAIL occurred, `exit_code=1`) | `/tmp/release-audit/08-db-restore-drill-production-no-yes.log` |
+
+Additional generated evidence:
+- `/tmp/restore-drill-evidence.md`
+
+### 3) Output summary (PASS/FAIL)
+- Secret strict scan: PASS.
+- Secret scan fallback without ripgrep: PASS, fallback message present.
+- CI check (`lint + test + build + strict scan`): PASS (lint warnings only, no lint errors).
+- Release preflight in production with `APP_URL`: PASS.
+- Release preflight in production without `APP_URL`: expected FAIL with clear guardrail message.
+- Non-production CI healthcheck without `APP_URL`: PASS with safe default `http://localhost:3000`.
+- Restore drill staging planner: PASS and evidence file generated.
+- Restore drill production without explicit `--yes`: expected FAIL (protection active).
+
+### 4) Auditor conclusion
+- GO / CONDITIONAL GO / NO-GO: **GO (for this validation scope)**
+- Basis: all mandatory checks matched expected outcomes, including expected safety failures.
+- Risks accepted: existing non-blocking lint warnings (`react-refresh/only-export-components`) remain outside this release-audit scope.
+- Sign-off (engineering/product/security): pending manual sign-off.
