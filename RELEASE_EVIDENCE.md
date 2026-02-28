@@ -202,7 +202,7 @@ Additional generated evidence:
 ### Scope and baseline
 - Base SHA under release evaluation: `5330f16f6281f58284789800e7ba68959803ab6b`
 - P0 commits present in sequence after base: `6b176df` -> `bba8fab` -> `5dc8318`
-- Current head for this audit branch: `639b985` (`docs: add release audit evidence (pre-go live)`)
+- Current head for this audit branch: `e4e926e` (`docs: finalize go/no-go gates evidence`)
 - Scope gate: `src/hooks/useAuth.tsx` is clean in this run and was not staged/committed.
 - Scope evidence: `/tmp/release-audit/00-scope-gate.log`
 - Commit order evidence: `/tmp/release-audit/00-commit-order.log`
@@ -229,13 +229,13 @@ Restore drill scaffold generated:
 ### Gate A (external): GitHub Actions CI on PR
 - Branch: `release/go-live-20260228`
 - PR URL: `https://github.com/vinicius788/gestorniq/pull/1`
-- Actions run URL: `https://github.com/vinicius788/gestorniq/actions/runs/22527727408`
+- Actions run URL: `https://github.com/vinicius788/gestorniq/actions/runs/22527775942`
 - Final status: `completed/success` (CI green)
 - Evidence:
   - `/tmp/release-audit/20-pr-url.log`
-  - `/tmp/release-audit/21-pr-checks.log`
-  - `/tmp/release-audit/23-pr-checks-watch.log`
-  - `/tmp/release-audit/24-run-list.json`
+  - `/tmp/release-audit/25-pr-checks-after-update.log`
+  - `/tmp/release-audit/26-pr-checks-watch-after-update.log`
+  - `/tmp/release-audit/27-run-list-latest.json`
 
 ### Gate B (external): Supabase secrets (staging + production)
 - Discovery result: repo defines only one `project_id` (`bjhpumlnvkpqdqlulnwq`) and does not declare separate `STAGING_REF` and `PROD_REF`.
