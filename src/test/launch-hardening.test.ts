@@ -26,7 +26,7 @@ describe("launch hardening guardrails", () => {
   it("enforces paid access in RLS policies for all metric snapshot tables", () => {
     const migration = readProjectFile("supabase/migrations/20260220100000_phase_a_launch_blockers.sql");
 
-    expect(migration).toContain("public.has_active_access(auth.uid())");
+    expect(migration).toContain("public.has_active_access()");
     expect(migration).toContain("ON public.revenue_snapshots");
     expect(migration).toContain("ON public.user_metrics");
     expect(migration).toContain("ON public.valuation_snapshots");

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { encryptSecret } from "../_shared/encryption.ts";
+import { respondWithPublicError } from "../_shared/errors.ts";
 import { getCorsHeaders, getRequiredEnv, HttpError, jsonResponse } from "../_shared/http.ts";
 import { createRequestLogger } from "../_shared/logging.ts";
 
@@ -129,8 +130,10 @@ serve(async (req) => {
     );
   } catch (error) {
     const status = error instanceof HttpError ? error.status : 500;
-    const message = error instanceof Error ? error.message : "Unknown error";
-    logger.fail("backfill.failed", { status, message });
-    return jsonResponse({ error: message }, status, {}, req);
+    logger.fail("backfill.failed", {
+      status,
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+    return respondWithPublicError(error, req);
   }
 });

@@ -3,6 +3,7 @@ import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { writeAuditLog } from "../_shared/audit.ts";
 import { decryptSecret, encryptSecret } from "../_shared/encryption.ts";
+import { publicError, respondWithPublicError } from "../_shared/errors.ts";
 import {
   getCorsHeaders,
   getRequiredEnv,
@@ -451,7 +452,7 @@ serve(async (req) => {
       logger.info("stripe_revenue.sync_denied_no_active_access", {
         company_id: company.id,
       });
-      return jsonResponse({ error: "Active subscription or trial required" }, 403, {}, req);
+      return publicError(403, "Forbidden", new Error("Active subscription or trial required"), req);
     }
 
     const latest = buckets[buckets.length - 1] ?? null;
@@ -497,8 +498,11 @@ serve(async (req) => {
     }, 200, {}, req);
   } catch (error) {
     const status = error instanceof HttpError ? error.status : 500;
-    const message = error instanceof Error ? error.message : "Unknown error";
-    logger.fail("stripe_revenue.sync_failed", { status, message, company_id: connectionCompanyId });
+    logger.fail("stripe_revenue.sync_failed", {
+      status,
+      message: error instanceof Error ? error.message : "Unknown error",
+      company_id: connectionCompanyId,
+    });
 
     if (supabaseAdmin && connectionCompanyId) {
       const nowIso = new Date().toISOString();
@@ -512,6 +516,6 @@ serve(async (req) => {
         .eq("company_id", connectionCompanyId);
     }
 
-    return jsonResponse({ error: message }, status, {}, req);
+    return respondWithPublicError(error, req);
   }
 });

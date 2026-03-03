@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import { respondWithPublicError } from "../_shared/errors.ts";
 import { getCorsHeaders, getRequiredEnv, HttpError, jsonResponse } from "../_shared/http.ts";
 import { createRequestLogger } from "../_shared/logging.ts";
 import { enforceRateLimit } from "../_shared/rate-limit.ts";
@@ -192,7 +193,6 @@ serve(async (req) => {
     const status = error instanceof HttpError ? error.status : 500;
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.fail("subscription.sync_failed", { status, message: errorMessage });
-
-    return jsonResponse({ error: errorMessage }, status, {}, req);
+    return respondWithPublicError(error, req);
   }
 });

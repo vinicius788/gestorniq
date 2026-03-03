@@ -14,6 +14,7 @@
     "security:scan-secrets": "bash scripts/scan-secrets.sh",
     "security:scan-secrets:strict": "SCAN_ENV_POLICY=1 bash scripts/scan-secrets.sh",
     "ops:healthcheck": "bash scripts/healthcheck.sh",
+    "ops:db-restore-drill": "bash scripts/db-restore-drill.sh",
     "supabase:db:push": "bash scripts/supabase-db-push.sh",
     "supabase:deploy": "bash scripts/supabase-deploy.sh",
     "supabase:provision": "bash scripts/supabase-provision.sh",
@@ -71,7 +72,7 @@
     "react-hook-form": "^7.61.1",
     "react-resizable-panels": "^2.1.9",
     "react-router-dom": "^6.30.3",
-    "recharts": "^2.15.4",
+    "recharts": "^3.7.0",
     "sonner": "^1.7.4",
     "tailwind-merge": "^2.6.0",
     "vaul": "^0.9.9",
@@ -85,7 +86,7 @@
     "@types/node": "^22.16.5",
     "@types/react": "^18.3.23",
     "@types/react-dom": "^18.3.7",
-    "@vitejs/plugin-react-swc": "^3.11.0",
+    "@vitejs/plugin-react-swc": "^4.2.3",
     "autoprefixer": "^10.4.21",
     "eslint": "^9.32.0",
     "eslint-plugin-react-hooks": "^5.2.0",
@@ -97,7 +98,10 @@
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.38.0",
-    "vite": "^5.4.19",
-    "vitest": "^3.2.4"
+    "vite": "^7.3.1",
+    "vitest": "^4.0.18"
+  },
+  "overrides": {
+    "lodash": ">=4.17.22"
   }
 }
