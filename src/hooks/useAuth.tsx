@@ -27,6 +27,32 @@ const CLERK_PUBLISHABLE_KEY = AUTH_CONFIG.clerkPublishableKey;
 const CLERK_SUPABASE_JWT_TEMPLATE = AUTH_CONFIG.clerkSupabaseJwtTemplate;
 const CLERK_SUPABASE_PROVIDER = AUTH_CONFIG.clerkSupabaseProvider;
 const CLERK_FRONTEND_API_URL = AUTH_CONFIG.clerkFrontendApiUrl;
+const AUTH_REDIRECT_ORIGIN = import.meta.env.VITE_AUTH_REDIRECT_ORIGIN?.trim();
+
+const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '');
+const isHttpUrl = (value: string) => {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
+const getAuthOrigin = () => {
+  if (AUTH_REDIRECT_ORIGIN && isHttpUrl(AUTH_REDIRECT_ORIGIN)) {
+    return trimTrailingSlash(AUTH_REDIRECT_ORIGIN);
+  }
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin;
+  }
+  return 'http://localhost:3000';
+};
+
+const getAuthUrl = (path: string) => {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${getAuthOrigin()}${normalizedPath}`;
+};
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 const decodeBase64Url = (value: string) => {
@@ -136,7 +162,7 @@ function SupabaseAuthProviderImpl({ children }: { children: ReactNode }) {
 
   const signUp = async (email: string, password: string, fullName?: string) => {
     const normalizedEmail = normalizeEmail(email);
-    const redirectUrl = `${window.location.origin}/dashboard`;
+    const redirectUrl = getAuthUrl('/dashboard');
 
     const { data, error } = await supabase.auth.signUp({
       email: normalizedEmail,
@@ -169,7 +195,7 @@ function SupabaseAuthProviderImpl({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}${redirectPath}`,
+        redirectTo: getAuthUrl(redirectPath),
         skipBrowserRedirect: true,
       },
     });
@@ -198,7 +224,7 @@ function SupabaseAuthProviderImpl({ children }: { children: ReactNode }) {
       type: 'signup',
       email: normalizedEmail,
       options: {
-        emailRedirectTo: `${window.location.origin}${safeRedirectPath}`,
+        emailRedirectTo: getAuthUrl(safeRedirectPath),
       },
     });
 
@@ -214,7 +240,7 @@ function SupabaseAuthProviderImpl({ children }: { children: ReactNode }) {
     }
 
     const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
-      redirectTo: `${window.location.origin}${safeRedirectPath}`,
+      redirectTo: getAuthUrl(safeRedirectPath),
     });
 
     return { error: error as Error | null };
@@ -380,7 +406,7 @@ function ClerkAuthProviderImpl({ children }: { children: ReactNode }) {
       try {
         await clerkSignUp.prepareEmailAddressVerification({
           strategy: 'email_link',
-          redirectUrl: `${window.location.origin}/auth/callback`,
+          redirectUrl: getAuthUrl('/auth/callback'),
         });
       } catch {
         await clerkSignUp.prepareEmailAddressVerification({ strategy: 'email_code' });
@@ -423,8 +449,8 @@ function ClerkAuthProviderImpl({ children }: { children: ReactNode }) {
     try {
       await clerkSignIn.authenticateWithRedirect({
         strategy: 'oauth_google',
-        redirectUrl: `${window.location.origin}/auth/callback`,
-        redirectUrlComplete: `${window.location.origin}${redirectPath}`,
+        redirectUrl: getAuthUrl('/auth/callback'),
+        redirectUrlComplete: getAuthUrl(redirectPath),
       });
       return { error: null };
     } catch (error) {
@@ -443,7 +469,7 @@ function ClerkAuthProviderImpl({ children }: { children: ReactNode }) {
       try {
         await clerkSignUp.prepareEmailAddressVerification({
           strategy: 'email_link',
-          redirectUrl: `${window.location.origin}${safeRedirectPath}`,
+          redirectUrl: getAuthUrl(safeRedirectPath),
         });
       } catch {
         await clerkSignUp.prepareEmailAddressVerification({ strategy: 'email_code' });
@@ -464,7 +490,7 @@ function ClerkAuthProviderImpl({ children }: { children: ReactNode }) {
 
     if (CLERK_FRONTEND_API_URL) {
       const resetUrl = new URL('/sign-in', CLERK_FRONTEND_API_URL);
-      resetUrl.searchParams.set('redirect_url', `${window.location.origin}${safeRedirectPath}`);
+      resetUrl.searchParams.set('redirect_url', getAuthUrl(safeRedirectPath));
       window.location.assign(resetUrl.toString());
       return { error: null };
     }

@@ -51,6 +51,7 @@ vercel link
 # set production envs in Vercel (one-time)
 vercel env add VITE_SUPABASE_URL production
 vercel env add VITE_SUPABASE_PUBLISHABLE_KEY production
+vercel env add VITE_AUTH_REDIRECT_ORIGIN production
 vercel env add VITE_CLERK_PUBLISHABLE_KEY production
 vercel env add VITE_CLERK_SUPABASE_JWT_TEMPLATE production
 
@@ -103,6 +104,7 @@ Frontend variables:
 - `VITE_SUPABASE_PROJECT_ID`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
 - `VITE_SUPABASE_URL`
+- `VITE_AUTH_REDIRECT_ORIGIN` (optional but recommended in production, e.g. `https://tickrify.com`)
 - `VITE_SENTRY_DSN` (optional)
 - `VITE_CLERK_PUBLISHABLE_KEY` (if Clerk is enabled)
 - `VITE_CLERK_SUPABASE_JWT_TEMPLATE`
