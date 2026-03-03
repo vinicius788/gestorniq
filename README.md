@@ -43,6 +43,25 @@ One-command Supabase provisioning (migrations + edge functions + healthcheck):
 npm run supabase:provision
 ```
 
+Frontend deploy (Vercel):
+```bash
+# first time in this repo
+vercel link
+
+# set production envs in Vercel (one-time)
+vercel env add VITE_SUPABASE_URL production
+vercel env add VITE_SUPABASE_PUBLISHABLE_KEY production
+vercel env add VITE_CLERK_PUBLISHABLE_KEY production
+vercel env add VITE_CLERK_SUPABASE_JWT_TEMPLATE production
+
+# deploy production
+vercel deploy --prod
+```
+
+Notes:
+- `vercel.json` includes SPA rewrites (`/(.*) -> /index.html`) to avoid 404 on routes like `/dashboard`.
+- After Vercel deploy, set the same public URL as `APP_URL` in Supabase secrets and redeploy Edge Functions.
+
 One-command staging flow:
 ```bash
 npm run release:staging
