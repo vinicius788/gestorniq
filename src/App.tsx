@@ -53,7 +53,7 @@ const App = () => (
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/support" element={<Support />} />
                 <Route path="/brand-preview" element={<BrandPreview />} />
-                <Route path="/dashboard" element={<DashboardLayout />}>
+                <Route path="/dashboard/*" element={<DashboardLayout />}>
                   <Route index element={<Dashboard />} />
                   <Route path="revenue" element={<Revenue />} />
                   <Route path="user-growth" element={<UserGrowth />} />
@@ -61,6 +61,7 @@ const App = () => (
                   <Route path="equity" element={<EquityCalculator />} />
                   <Route path="settings" element={<Settings />} />
                   <Route path="billing" element={<Billing />} />
+                  <Route path="*" element={<Navigate to="/dashboard" replace />} />
                 </Route>
                 <Route path="*" element={<NotFound />} />
               </Routes>
