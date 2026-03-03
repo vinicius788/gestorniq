@@ -25,6 +25,8 @@ export default function Auth() {
   const oauthError = searchParams.get('auth_error');
   const clerkOnlyMode = AUTH_CONFIG.clerkOnlyMode;
   const postAuthPath = isDemoRequested ? '/dashboard?demo=1' : '/dashboard';
+  const isAlreadySignedInError = (message: string) =>
+    message.toLowerCase().includes('already signed in');
 
   const pitch = {
     label: 'Fundraising-ready in minutes',
@@ -54,13 +56,19 @@ export default function Auth() {
   useEffect(() => {
     if (!oauthError) return;
 
+    if (isAlreadySignedInError(oauthError)) {
+      persistDemoFlags();
+      navigate(postAuthPath, { replace: true });
+      return;
+    }
+
     toast.error(oauthError);
 
     const params = new URLSearchParams(searchParams);
     params.delete('auth_error');
     const nextSearch = params.toString();
     navigate(nextSearch ? `/auth?${nextSearch}` : '/auth', { replace: true });
-  }, [oauthError, navigate, searchParams]);
+  }, [oauthError, navigate, searchParams, persistDemoFlags, postAuthPath]);
 
   const validateForm = (candidateEmail: string, candidatePassword: string) => {
     const newErrors: typeof errors = {};
@@ -179,6 +187,11 @@ export default function Auth() {
     try {
       const { error } = await signInWithGoogle(postAuthPath);
       if (error) {
+        if (isAlreadySignedInError(error.message)) {
+          persistDemoFlags();
+          navigate(postAuthPath, { replace: true });
+          return;
+        }
         toast.error(error.message || t.auth.googleError);
       }
     } finally {

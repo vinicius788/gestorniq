@@ -25,6 +25,9 @@ const getErrorMessage = (error: unknown) => {
   return 'OAuth callback failed. Please try signing in again.';
 };
 
+const isAlreadySignedInError = (message: string) =>
+  message.toLowerCase().includes('already signed in');
+
 export default function AuthCallback() {
   const clerk = useClerk();
   const navigate = useNavigate();
@@ -44,6 +47,10 @@ export default function AuthCallback() {
         });
       } catch (error) {
         const errorMessage = getErrorMessage(error);
+        if (isAlreadySignedInError(errorMessage)) {
+          navigate('/dashboard', { replace: true });
+          return;
+        }
         navigate(`/auth?auth_error=${encodeURIComponent(errorMessage)}`, { replace: true });
       }
     };
