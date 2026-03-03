@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import { respondWithPublicError } from "../_shared/errors.ts";
 import { getCorsHeaders, getRequiredEnv, HttpError, jsonResponse } from "../_shared/http.ts";
 import { createRequestLogger } from "../_shared/logging.ts";
 
@@ -70,9 +71,10 @@ serve(async (req) => {
     }, 200, {}, req);
   } catch (error) {
     const status = error instanceof HttpError ? error.status : 500;
-    const message = error instanceof Error ? error.message : "Unknown error";
-    logger.fail("stripe_revenue.status_failed", { status, message });
-
-    return jsonResponse({ error: message }, status, {}, req);
+    logger.fail("stripe_revenue.status_failed", {
+      status,
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+    return respondWithPublicError(error, req);
   }
 });

@@ -14,7 +14,7 @@ describe("blocker fixes", () => {
     expect(syncFn).toContain('.rpc("has_active_access"');
     expect(accessCheckCount).toBeGreaterThanOrEqual(2);
     expect(syncFn).toContain('throw new HttpError(403, "Active subscription or trial required")');
-    expect(syncFn).toContain('return jsonResponse({ error: "Active subscription or trial required" }, 403, {}, req);');
+    expect(syncFn).toContain('return publicError(403, "Forbidden"');
   });
 
   it("prevents audit actor forgery by revoking write_audit_log from authenticated", () => {
@@ -97,5 +97,54 @@ describe("blocker fixes", () => {
     expect(backfillFn).toContain("api_key_secret_encrypted");
     expect(syncFn).toContain("isProductionRuntime()");
     expect(syncFn).toContain('getRequiredEnv("STRIPE_CONNECTIONS_ENCRYPTION_KEY")');
+  });
+
+  it("prevents authenticated users from querying arbitrary has_active_access UUIDs", () => {
+    const migration = readProjectFile("supabase/migrations/20260303100500_security_hardening.sql");
+
+    expect(migration).toContain("CREATE OR REPLACE FUNCTION public.has_active_access(user_uuid UUID)");
+    expect(migration).toContain("CREATE OR REPLACE FUNCTION public.has_active_access()");
+    expect(migration).toContain("REVOKE ALL ON FUNCTION public.has_active_access(UUID) FROM authenticated;");
+    expect(migration).toContain("GRANT EXECUTE ON FUNCTION public.has_active_access(UUID) TO service_role;");
+    expect(migration).toContain("GRANT EXECUTE ON FUNCTION public.has_active_access() TO authenticated;");
+  });
+
+  it("requires an explicit subscription period end for billable access statuses", () => {
+    const migration = readProjectFile("supabase/migrations/20260303100500_security_hardening.sql");
+
+    expect(migration).toContain("lower(s.status) IN ('active', 'trialing', 'past_due')");
+    expect(migration).toContain("s.current_period_end IS NOT NULL");
+    expect(migration).toContain("s.current_period_end > now()");
+  });
+
+  it("falls back to pending_verification when webhook subscription fetch fails", () => {
+    const webhookFn = readProjectFile("supabase/functions/stripe-webhook/index.ts");
+
+    expect(webhookFn).toContain('let status = "pending_verification"');
+    expect(webhookFn).toContain("webhook.subscription_retrieve_failed");
+    expect(webhookFn).toContain("pending_verification");
+    expect(webhookFn).toContain("TODO: Reconcile `pending_verification` subscriptions");
+  });
+
+  it("uses public error responses instead of leaking raw internal errors", () => {
+    const sharedErrors = readProjectFile("supabase/functions/_shared/errors.ts");
+    const checkoutFn = readProjectFile("supabase/functions/create-checkout/index.ts");
+    const syncFn = readProjectFile("supabase/functions/sync-stripe-revenue/index.ts");
+
+    expect(sharedErrors).toContain("export function publicError");
+    expect(sharedErrors).toContain("Unauthorized");
+    expect(sharedErrors).toContain("Forbidden");
+    expect(sharedErrors).toContain("Request failed");
+    expect(checkoutFn).toContain("respondWithPublicError(error, req)");
+    expect(syncFn).toContain("respondWithPublicError(error, req)");
+  });
+
+  it("hardens dependency scanning and blocks CI on moderate+ npm audit findings", () => {
+    const packageJson = readProjectFile("package.json");
+    const workflow = readProjectFile(".github/workflows/ci.yml");
+
+    expect(packageJson).toContain('"overrides"');
+    expect(packageJson).toContain('"lodash"');
+    expect(workflow).toContain("npm audit --audit-level=moderate || exit 1");
   });
 });

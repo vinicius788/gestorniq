@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { writeAuditLog } from "../_shared/audit.ts";
+import { respondWithPublicError } from "../_shared/errors.ts";
 import { getBaseUrl, getCorsHeaders, getRequiredEnv, HttpError, jsonResponse } from "../_shared/http.ts";
 import { createRequestLogger } from "../_shared/logging.ts";
 import { enforceRateLimit } from "../_shared/rate-limit.ts";
@@ -140,9 +141,10 @@ serve(async (req) => {
     return jsonResponse({ url: session.url }, 200, {}, req);
   } catch (error) {
     const status = error instanceof HttpError ? error.status : 500;
-    const message = error instanceof Error ? error.message : "Unknown error";
-    logger.fail("checkout.failed", { status, message });
-
-    return jsonResponse({ error: message }, status, {}, req);
+    logger.fail("checkout.failed", {
+      status,
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+    return respondWithPublicError(error, req);
   }
 });

@@ -332,7 +332,7 @@ $$;
 CREATE INDEX IF NOT EXISTS subscriptions_user_id_updated_at_idx
   ON public.subscriptions (user_id, updated_at DESC);
 
-CREATE OR REPLACE FUNCTION public.has_active_access(user_uuid UUID DEFAULT auth.uid())
+CREATE OR REPLACE FUNCTION public.has_active_access(user_uuid UUID)
 RETURNS boolean
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -350,7 +350,8 @@ BEGIN
     WHERE s.user_id = user_uuid
       AND COALESCE(lower(s.plan), 'free') <> 'free'
       AND lower(s.status) IN ('active', 'trialing', 'past_due')
-      AND (s.current_period_end IS NULL OR s.current_period_end >= now())
+      AND s.current_period_end IS NOT NULL
+      AND s.current_period_end > now()
   ) THEN
     RETURN TRUE;
   END IF;
@@ -370,10 +371,29 @@ BEGIN
 END;
 $$;
 
+-- SECURITY DEFINER note: this parameterized variant can evaluate arbitrary users and
+-- must stay restricted to trusted server contexts (service_role only).
+CREATE OR REPLACE FUNCTION public.has_active_access()
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+STABLE
+SET search_path = public
+AS $$
+BEGIN
+  RETURN public.has_active_access(auth.uid());
+END;
+$$;
+
 REVOKE ALL ON FUNCTION public.has_active_access(UUID) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.has_active_access(UUID) FROM anon;
-GRANT EXECUTE ON FUNCTION public.has_active_access(UUID) TO authenticated;
+REVOKE ALL ON FUNCTION public.has_active_access(UUID) FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.has_active_access(UUID) TO service_role;
+
+REVOKE ALL ON FUNCTION public.has_active_access() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.has_active_access() FROM anon;
+GRANT EXECUTE ON FUNCTION public.has_active_access() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.has_active_access() TO service_role;
 
 CREATE OR REPLACE FUNCTION public.ensure_company_for_current_user()
 RETURNS public.companies
@@ -437,11 +457,11 @@ ON public.companies
 FOR UPDATE
 USING (
   auth.uid() = user_id
-  AND public.has_active_access(auth.uid())
+  AND public.has_active_access()
 )
 WITH CHECK (
   auth.uid() = user_id
-  AND public.has_active_access(auth.uid())
+  AND public.has_active_access()
 );
 
 -- Ensure trial/subscription mutations remain restricted to trusted contexts.
@@ -458,7 +478,7 @@ CREATE POLICY "Users with active access can view revenue"
 ON public.revenue_snapshots
 FOR SELECT
 USING (
-  public.has_active_access(auth.uid())
+  public.has_active_access()
   AND EXISTS (
     SELECT 1
     FROM public.companies c
@@ -471,7 +491,7 @@ CREATE POLICY "Users with active access can insert revenue"
 ON public.revenue_snapshots
 FOR INSERT
 WITH CHECK (
-  public.has_active_access(auth.uid())
+  public.has_active_access()
   AND EXISTS (
     SELECT 1
     FROM public.companies c
@@ -484,7 +504,7 @@ CREATE POLICY "Users with active access can update revenue"
 ON public.revenue_snapshots
 FOR UPDATE
 USING (
-  public.has_active_access(auth.uid())
+  public.has_active_access()
   AND EXISTS (
     SELECT 1
     FROM public.companies c
@@ -493,7 +513,7 @@ USING (
   )
 )
 WITH CHECK (
-  public.has_active_access(auth.uid())
+  public.has_active_access()
   AND EXISTS (
     SELECT 1
     FROM public.companies c
@@ -506,7 +526,7 @@ CREATE POLICY "Users with active access can delete revenue"
 ON public.revenue_snapshots
 FOR DELETE
 USING (
-  public.has_active_access(auth.uid())
+  public.has_active_access()
   AND EXISTS (
     SELECT 1
     FROM public.companies c
@@ -524,7 +544,7 @@ CREATE POLICY "Users with active access can view user metrics"
 ON public.user_metrics
 FOR SELECT
 USING (
-  public.has_active_access(auth.uid())
+  public.has_active_access()
   AND EXISTS (
     SELECT 1
     FROM public.companies c
@@ -537,7 +557,7 @@ CREATE POLICY "Users with active access can insert user metrics"
 ON public.user_metrics
 FOR INSERT
 WITH CHECK (
-  public.has_active_access(auth.uid())
+  public.has_active_access()
   AND EXISTS (
     SELECT 1
     FROM public.companies c
@@ -550,7 +570,7 @@ CREATE POLICY "Users with active access can update user metrics"
 ON public.user_metrics
 FOR UPDATE
 USING (
-  public.has_active_access(auth.uid())
+  public.has_active_access()
   AND EXISTS (
     SELECT 1
     FROM public.companies c
@@ -559,7 +579,7 @@ USING (
   )
 )
 WITH CHECK (
-  public.has_active_access(auth.uid())
+  public.has_active_access()
   AND EXISTS (
     SELECT 1
     FROM public.companies c
@@ -572,7 +592,7 @@ CREATE POLICY "Users with active access can delete user metrics"
 ON public.user_metrics
 FOR DELETE
 USING (
-  public.has_active_access(auth.uid())
+  public.has_active_access()
   AND EXISTS (
     SELECT 1
     FROM public.companies c
@@ -590,7 +610,7 @@ CREATE POLICY "Users with active access can view valuation"
 ON public.valuation_snapshots
 FOR SELECT
 USING (
-  public.has_active_access(auth.uid())
+  public.has_active_access()
   AND EXISTS (
     SELECT 1
     FROM public.companies c
@@ -603,7 +623,7 @@ CREATE POLICY "Users with active access can insert valuation"
 ON public.valuation_snapshots
 FOR INSERT
 WITH CHECK (
-  public.has_active_access(auth.uid())
+  public.has_active_access()
   AND EXISTS (
     SELECT 1
     FROM public.companies c
@@ -616,7 +636,7 @@ CREATE POLICY "Users with active access can update valuation"
 ON public.valuation_snapshots
 FOR UPDATE
 USING (
-  public.has_active_access(auth.uid())
+  public.has_active_access()
   AND EXISTS (
     SELECT 1
     FROM public.companies c
@@ -625,7 +645,7 @@ USING (
   )
 )
 WITH CHECK (
-  public.has_active_access(auth.uid())
+  public.has_active_access()
   AND EXISTS (
     SELECT 1
     FROM public.companies c
@@ -638,7 +658,7 @@ CREATE POLICY "Users with active access can delete valuation"
 ON public.valuation_snapshots
 FOR DELETE
 USING (
-  public.has_active_access(auth.uid())
+  public.has_active_access()
   AND EXISTS (
     SELECT 1
     FROM public.companies c

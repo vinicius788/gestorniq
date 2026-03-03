@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { writeAuditLog } from "../_shared/audit.ts";
+import { publicError, respondWithPublicError } from "../_shared/errors.ts";
 import { HttpError, jsonResponse } from "../_shared/http.ts";
 import { createRequestLogger } from "../_shared/logging.ts";
 
@@ -98,7 +99,7 @@ serve(async (req) => {
       event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret);
     } catch {
       logger.fail("webhook.signature_invalid", { status: 400 });
-      return jsonResponse({ error: "Invalid signature" }, 400, {}, req);
+      return publicError(403, "Forbidden", new Error("Invalid Stripe webhook signature"), req);
     }
 
     const { data: insertedEvents, error: eventStoreError } = await supabaseAdmin
@@ -149,15 +150,26 @@ serve(async (req) => {
         if (userId && typeof session.customer === "string" && typeof session.subscription === "string") {
           let currentPeriodStart: string | null = null;
           let currentPeriodEnd: string | null = null;
-          let status = "active";
+          let status = "pending_verification";
 
           try {
             const subscription = await stripe.subscriptions.retrieve(session.subscription);
+            if (!subscription) {
+              throw new Error("Missing subscription payload from Stripe");
+            }
             currentPeriodStart = new Date(subscription.current_period_start * 1000).toISOString();
             currentPeriodEnd = new Date(subscription.current_period_end * 1000).toISOString();
             status = normalizeStatus(subscription.status);
-          } catch {
-            // Keep fallback values when Stripe retrieval transiently fails.
+          } catch (retrieveError) {
+            logger.error("webhook.subscription_retrieve_failed", {
+              event_id: event.id,
+              stripe_subscription_id: session.subscription,
+              message: retrieveError instanceof Error ? retrieveError.message : String(retrieveError),
+            });
+            // TODO: Reconcile `pending_verification` subscriptions via scheduled cron to resolve transient Stripe failures.
+            status = "pending_verification";
+            currentPeriodStart = null;
+            currentPeriodEnd = null;
           }
 
           await updateSubscription(supabaseAdmin, {
@@ -278,9 +290,10 @@ serve(async (req) => {
     return jsonResponse({ received: true }, 200, {}, req);
   } catch (error) {
     const status = error instanceof HttpError ? error.status : 500;
-    const message = error instanceof Error ? error.message : "Unknown error";
-    logger.fail("webhook.failed", { status, message });
-
-    return jsonResponse({ error: message }, status, {}, req);
+    logger.fail("webhook.failed", {
+      status,
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+    return respondWithPublicError(error, req);
   }
 });

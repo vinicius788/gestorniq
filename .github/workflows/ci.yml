@@ -29,6 +29,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ripgrep
 
+      - name: Audit dependencies (fail on moderate+)
+        run: npm audit --audit-level=moderate || exit 1
+
       - name: Validate (lint, test, build)
         run: npm run ci:check
 

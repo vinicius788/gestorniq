@@ -72,8 +72,8 @@ bash scripts/release-resources.sh summary
 ```
 
 Dependency gate policy:
-- `npm run audit:high` blocks CI/release on high/critical advisories.
-- Moderate advisories are non-blocking but must be recorded in `RELEASE_EVIDENCE.md` with mitigation owner/date.
+- `npm audit --audit-level=moderate` blocks CI/release on moderate/high/critical advisories.
+- `npm run audit:high` remains available for focused high/critical checks.
 
 ## Environment
 Use `.env.example` as the template.
@@ -115,6 +115,7 @@ Do not enable `CORS_ALLOW_ALL_LOCAL` in production.
 - Secret rotation procedure: `SECURITY_ROTATION_RUNBOOK.md`
 - Go-live operational checklist: `GO_LIVE_CHECKLIST.md`
 - Release evidence template: `RELEASE_EVIDENCE.md`
+- Supabase Auth attack-protection/rate-limit settings must be configured in Dashboard: `Authentication -> Attack protection` (tracking: https://github.com/vinicius788/gestorniq/issues/5).
 
 ## Stripe revenue sync
 - Connect Stripe from `Settings` using a read-only-capable key when possible.

@@ -3,6 +3,7 @@ import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { writeAuditLog } from "../_shared/audit.ts";
 import { encryptSecret } from "../_shared/encryption.ts";
+import { respondWithPublicError } from "../_shared/errors.ts";
 import {
   getCorsHeaders,
   getRequiredEnv,
@@ -153,9 +154,10 @@ serve(async (req) => {
     }, 200, {}, req);
   } catch (error) {
     const status = error instanceof HttpError ? error.status : 500;
-    const message = error instanceof Error ? error.message : "Unknown error";
-    logger.fail("stripe_revenue.connect_failed", { status, message });
-
-    return jsonResponse({ error: message }, status, {}, req);
+    logger.fail("stripe_revenue.connect_failed", {
+      status,
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+    return respondWithPublicError(error, req);
   }
 });
