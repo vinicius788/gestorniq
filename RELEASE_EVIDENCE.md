@@ -70,11 +70,15 @@
    - Log: `/tmp/release-audit/08-db-restore-drill-production-without-yes-expected-fail.log`
 
 ## Phase 4 - External gate A (GitHub Actions CI on PR)
-- Status: `PENDING` (to be updated after PR creation/push/checks)
-- Required evidence to attach:
-  - PR URL
-  - Actions run URL
-  - Final check conclusion
+- Status: `PASS`
+- PR URL: `https://github.com/vinicius788/gestorniq/pull/2`
+- Actions run URL: `https://github.com/vinicius788/gestorniq/actions/runs/22621835491`
+- Checks output logs:
+  - Initial (pending): `/tmp/release-audit/14-gh-pr-checks.log`
+  - Final (green): `/tmp/release-audit/14b-gh-pr-checks-final.log`
+  - Run list initial: `/tmp/release-audit/15-gh-run-list.log`
+  - Run list final: `/tmp/release-audit/15b-gh-run-list-final.log`
+- Final check conclusion: `validate = pass`
 
 ## Phase 5 - External gate B (Supabase secrets: staging + production)
 - Discovery logs:
@@ -134,7 +138,7 @@
   - Gate B (`Supabase secrets`) is `MISSING_INPUT`.
   - Gate C (`APP_URL real config`) is `BLOCKED`.
   - Gate D (`Stripe E2E staging`) is `FAIL`.
-  - Gate A (`GitHub Actions CI on PR`) still `PENDING`.
+  - Gate A (`GitHub Actions CI on PR`) is `PASS`.
 - Exact blockers to clear (ordered):
   1. Provide `STAGING_REF` and `PROD_REF`.
      - Then run:
@@ -153,5 +157,3 @@
   3. Produce Stripe staging E2E evidence.
      - Option A: fix `scripts/smoke-staging.sh` runtime error and rerun.
      - Option B: execute the 5-step manual checklist above and attach logs/screenshots.
-  4. Complete Gate A after pushing this branch.
-     - Create PR, wait for CI checks, attach PR + Actions links and final status.
