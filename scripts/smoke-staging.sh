@@ -11,7 +11,8 @@ evidence_file="${SMOKE_EVIDENCE_FILE:-staging-smoke-evidence.txt}"
 status_ok=true
 
 log() {
-  printf '%s\n' "$1" | tee -a "${evidence_file}"
+  local message="${1-}"
+  printf '%s\n' "${message}" | tee -a "${evidence_file}"
 }
 
 check_cmd() {
@@ -82,7 +83,7 @@ log
 log "## Auth/readiness endpoints"
 check_cmd \
   "Supabase Auth health endpoint" \
-  curl -fsS "${SUPABASE_URL%/}/auth/v1/health"
+  curl -fsS -H "apikey: ${SUPABASE_ANON_KEY}" "${SUPABASE_URL%/}/auth/v1/health"
 check_cmd \
   "Supabase Auth settings endpoint" \
   curl -fsS -H "apikey: ${SUPABASE_ANON_KEY}" "${SUPABASE_URL%/}/auth/v1/settings"
