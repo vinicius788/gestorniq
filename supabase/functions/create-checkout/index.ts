@@ -6,6 +6,7 @@ import { respondWithPublicError } from "../_shared/errors.ts";
 import { getBaseUrl, getCorsHeaders, getRequiredEnv, HttpError, jsonResponse } from "../_shared/http.ts";
 import { createRequestLogger } from "../_shared/logging.ts";
 import { enforceRateLimit } from "../_shared/rate-limit.ts";
+import { getPlanFromPriceId, resolveCheckoutPlan, resolveCheckoutPriceId } from "../_shared/stripe-plans.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -57,30 +58,38 @@ serve(async (req) => {
     });
 
     const body = await req.json().catch(() => ({}));
-    const requestedPlan = typeof body.plan === "string" ? body.plan.toLowerCase() : "standard";
+    const requestedPlan = typeof body.plan === "string" ? body.plan : null;
+    const planName = typeof body.planName === "string" ? body.planName : null;
+    const requestedPriceId = typeof body.priceId === "string" ? body.priceId.trim() : "";
     const companyId = typeof body.company_id === "string" ? body.company_id : "";
 
     if (!companyId) {
       throw new HttpError(400, "company_id is required");
     }
 
-    if (!["standard", "standard_annual"].includes(requestedPlan)) {
-      throw new HttpError(400, "plan must be standard or standard_annual");
-    }
-
     const { data: company, error: companyError } = await supabaseClient
       .from("companies")
       .select("id")
       .eq("id", companyId)
-      .eq("user_id", user.id)
+      .eq("clerk_user_id", user.id)
       .maybeSingle();
 
     if (companyError) throw new HttpError(500, companyError.message);
     if (!company) throw new HttpError(403, "Unauthorized company access");
 
     const stripeSecret = getRequiredEnv("STRIPE_SECRET_KEY");
-    const stripePriceStandardAnnual = getRequiredEnv("STRIPE_PRICE_STANDARD_ANNUAL");
     const baseUrl = getBaseUrl(req, logger.info);
+    const planSlug = resolveCheckoutPlan(requestedPlan, planName);
+
+    let stripePriceId = requestedPriceId;
+    if (stripePriceId) {
+      const pricePlan = getPlanFromPriceId(stripePriceId, "free");
+      if (pricePlan === "free" || pricePlan !== planSlug) {
+        throw new HttpError(400, "priceId does not match requested plan");
+      }
+    } else {
+      stripePriceId = resolveCheckoutPriceId(planSlug);
+    }
 
     const stripe = new Stripe(stripeSecret, {
       apiVersion: "2025-08-27.basil",
@@ -94,13 +103,12 @@ serve(async (req) => {
       logger.info("checkout.customer.reused", { customer_id: customerId });
     }
 
-    const planSlug = "standard";
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       customer_email: customerId ? undefined : user.email,
       line_items: [
         {
-          price: stripePriceStandardAnnual,
+          price: stripePriceId,
           quantity: 1,
         },
       ],
@@ -111,14 +119,14 @@ serve(async (req) => {
           company_id: companyId,
           plan: planSlug,
           billing_cycle: "annual",
-          user_id: user.id,
+          clerk_user_id: user.id,
         },
       },
       metadata: {
         company_id: companyId,
         plan: planSlug,
         billing_cycle: "annual",
-        user_id: user.id,
+        clerk_user_id: user.id,
       },
       success_url: `${baseUrl}/dashboard/billing?checkout=success`,
       cancel_url: `${baseUrl}/dashboard/billing?checkout=canceled`,

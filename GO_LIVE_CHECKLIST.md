@@ -52,6 +52,7 @@ Run:
 npm run supabase:secrets:check
 npm run supabase:deploy
 APP_ENV=production npm run release:preflight
+npm run ops:auth-bridge
 ```
 
 If needed, include admin migration helper deploy:
@@ -63,6 +64,7 @@ Evidence:
 - [ ] `supabase:secrets:check` output pasted.
 - [ ] `supabase:deploy` output pasted (function names + deploy IDs/logs).
 - [ ] `release:preflight` output pasted (no `[FAIL]` entries).
+- [ ] `ops:auth-bridge` output pasted (Clerk JWT template validated as HS256 + custom signing key, and bearer auth accepted by Supabase).
 - [ ] Screenshot of Supabase Functions dashboard showing deployed timestamps.
 
 ## 3) Database and migration validation

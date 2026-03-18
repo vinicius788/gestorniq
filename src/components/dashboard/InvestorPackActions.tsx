@@ -49,6 +49,16 @@ export function InvestorPackActions({
     [companyName, currency, metrics, revenueSnapshots, userMetrics, valuationSnapshots],
   );
 
+  const notifyInvestorPackExport = (type: "csv" | "pdf") => {
+    if (typeof window === "undefined") return;
+
+    window.dispatchEvent(
+      new CustomEvent("gestorniq:investor-pack-exported", {
+        detail: { type },
+      }),
+    );
+  };
+
   const handleExportCsv = () => {
     if (!hasData) {
       toast.error("Add at least one snapshot before exporting.");
@@ -59,6 +69,7 @@ export function InvestorPackActions({
     try {
       const csv = buildInvestorPackCsv(payload);
       downloadCsvFile(`gestorniq-investor-pack-${today}.csv`, csv);
+      notifyInvestorPackExport("csv");
       toast.success("Investor Pack CSV exported.");
     } catch {
       toast.error("Failed to export CSV.");
@@ -77,6 +88,7 @@ export function InvestorPackActions({
     try {
       const html = buildInvestorPackHtml(payload);
       openInvestorPackPrintWindow("GestorNiq Investor Pack", html);
+      notifyInvestorPackExport("pdf");
       toast.success("Print window opened. Choose 'Save as PDF'.");
     } catch {
       toast.error("Failed to open PDF export.");

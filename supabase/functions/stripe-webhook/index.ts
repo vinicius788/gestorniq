@@ -5,12 +5,7 @@ import { writeAuditLog } from "../_shared/audit.ts";
 import { publicError, respondWithPublicError } from "../_shared/errors.ts";
 import { HttpError, jsonResponse } from "../_shared/http.ts";
 import { createRequestLogger } from "../_shared/logging.ts";
-
-const normalizePlan = (plan: string | null | undefined) => {
-  const normalized = (plan ?? "").toLowerCase().trim();
-  if (!normalized || normalized === "free") return "standard";
-  return "standard";
-};
+import { getPlanFromSubscription, getSubscriptionAmountCents, normalizePlan } from "../_shared/stripe-plans.ts";
 
 const normalizeStatus = (status: Stripe.Subscription.Status): string => {
   if (["active", "trialing", "past_due"].includes(status)) return status;
@@ -26,8 +21,73 @@ interface SubscriptionUpdate {
   stripeSubscriptionId: string;
   status: string;
   plan: string;
+  amountCents: number;
+  currency: string;
   currentPeriodStart?: string | null;
   currentPeriodEnd?: string | null;
+}
+
+const getMonthDate = (timestampSeconds: number): string => {
+  const date = new Date(timestampSeconds * 1000);
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-01`;
+};
+
+const getCurrentMonthDate = (): string => {
+  const now = new Date();
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-01`;
+};
+
+async function getCompanyIdByClerkUserId(
+  supabase: any,
+  clerkUserId: string,
+): Promise<string | null> {
+  const { data: company, error } = await supabase
+    .from("companies")
+    .select("id")
+    .eq("clerk_user_id", clerkUserId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return company?.id ?? null;
+}
+
+async function incrementSnapshotMetric(
+  supabase: any,
+  companyId: string,
+  monthDate: string,
+  metric: "new_mrr" | "churned_mrr",
+  delta: number,
+) {
+  if (delta <= 0) return;
+
+  const { data: existing, error: existingError } = await supabase
+    .from("revenue_snapshots")
+    .select("mrr, arr, new_mrr, expansion_mrr, churned_mrr")
+    .eq("company_id", companyId)
+    .eq("date", monthDate)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+
+  const nextValue = (existing?.[metric] ?? 0) + delta;
+
+  const { error: upsertError } = await supabase
+    .from("revenue_snapshots")
+    .upsert(
+      {
+        company_id: companyId,
+        date: monthDate,
+        mrr: existing?.mrr ?? 0,
+        arr: existing?.arr ?? 0,
+        new_mrr: metric === "new_mrr" ? nextValue : (existing?.new_mrr ?? 0),
+        expansion_mrr: existing?.expansion_mrr ?? 0,
+        churned_mrr: metric === "churned_mrr" ? nextValue : (existing?.churned_mrr ?? 0),
+        source: "stripe",
+      },
+      { onConflict: "company_id,date" },
+    );
+
+  if (upsertError) throw upsertError;
 }
 
 async function updateSubscription(supabase: any, data: SubscriptionUpdate) {
@@ -36,6 +96,8 @@ async function updateSubscription(supabase: any, data: SubscriptionUpdate) {
     stripe_subscription_id: data.stripeSubscriptionId,
     status: data.status,
     plan: data.plan,
+    amount_cents: data.amountCents,
+    currency: data.currency,
     current_period_start: data.currentPeriodStart || null,
     current_period_end: data.currentPeriodEnd || null,
     updated_at: new Date().toISOString(),
@@ -44,7 +106,7 @@ async function updateSubscription(supabase: any, data: SubscriptionUpdate) {
   const { data: existing, error: fetchError } = await supabase
     .from("subscriptions")
     .select("id")
-    .eq("user_id", data.userId)
+    .eq("clerk_user_id", data.userId)
     .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -63,7 +125,7 @@ async function updateSubscription(supabase: any, data: SubscriptionUpdate) {
 
   const { error } = await supabase
     .from("subscriptions")
-    .insert({ user_id: data.userId, ...payload });
+    .insert({ user_id: null, clerk_user_id: data.userId, ...payload });
 
   if (error) throw error;
 }
@@ -130,8 +192,8 @@ serve(async (req) => {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
-        const userIdFromMetadata = session.metadata?.user_id;
-        const planFromMetadata = normalizePlan(session.metadata?.plan);
+        const userIdFromMetadata = session.metadata?.clerk_user_id ?? session.metadata?.user_id;
+        const planFromMetadata = normalizePlan(session.metadata?.plan, "smart");
 
         let userId = userIdFromMetadata ?? null;
         if (!userId) {
@@ -139,11 +201,11 @@ serve(async (req) => {
           if (customerEmail) {
             const { data: profile } = await supabaseAdmin
               .from("profiles")
-              .select("user_id")
+              .select("clerk_user_id")
               .eq("email", customerEmail)
               .maybeSingle();
 
-            userId = profile?.user_id ?? null;
+            userId = profile?.clerk_user_id ?? null;
           }
         }
 
@@ -151,6 +213,9 @@ serve(async (req) => {
           let currentPeriodStart: string | null = null;
           let currentPeriodEnd: string | null = null;
           let status = "pending_verification";
+          let amountCents = typeof session.amount_total === "number" ? session.amount_total : 0;
+          let currency = (session.currency ?? "brl").toLowerCase();
+          let plan = planFromMetadata;
 
           try {
             const subscription = await stripe.subscriptions.retrieve(session.subscription);
@@ -160,6 +225,9 @@ serve(async (req) => {
             currentPeriodStart = new Date(subscription.current_period_start * 1000).toISOString();
             currentPeriodEnd = new Date(subscription.current_period_end * 1000).toISOString();
             status = normalizeStatus(subscription.status);
+            amountCents = getSubscriptionAmountCents(subscription) || amountCents;
+            currency = (subscription.currency ?? currency).toLowerCase();
+            plan = getPlanFromSubscription(subscription, planFromMetadata);
           } catch (retrieveError) {
             logger.error("webhook.subscription_retrieve_failed", {
               event_id: event.id,
@@ -177,10 +245,23 @@ serve(async (req) => {
             stripeCustomerId: session.customer,
             stripeSubscriptionId: session.subscription,
             status,
-            plan: planFromMetadata,
+            plan,
+            amountCents,
+            currency,
             currentPeriodStart,
             currentPeriodEnd,
           });
+
+          const companyId = await getCompanyIdByClerkUserId(supabaseAdmin, userId);
+          if (companyId) {
+            await incrementSnapshotMetric(
+              supabaseAdmin,
+              companyId,
+              getCurrentMonthDate(),
+              "new_mrr",
+              amountCents / 100,
+            );
+          }
 
           await writeAuditLog(supabaseAdmin, {
             action: "billing.webhook_checkout_completed",
@@ -189,6 +270,8 @@ serve(async (req) => {
               event_id: event.id,
               stripe_customer_id: session.customer,
               stripe_subscription_id: session.subscription,
+              plan,
+              amount_cents: amountCents,
             },
             source: "stripe_webhook",
           });
@@ -200,21 +283,23 @@ serve(async (req) => {
       case "customer.subscription.created":
       case "customer.subscription.updated": {
         const subscription = event.data.object as Stripe.Subscription;
-        const plan = normalizePlan(subscription.metadata?.plan);
+        const plan = getPlanFromSubscription(subscription, "smart");
         const status = normalizeStatus(subscription.status);
+        const amountCents = getSubscriptionAmountCents(subscription);
+        const currency = (subscription.currency ?? "brl").toLowerCase();
 
-        let userId = subscription.metadata?.user_id ?? null;
+        let userId = subscription.metadata?.clerk_user_id ?? subscription.metadata?.user_id ?? null;
 
         if (!userId && typeof subscription.customer === "string") {
           const { data: existingSub } = await supabaseAdmin
             .from("subscriptions")
-            .select("user_id")
+            .select("clerk_user_id")
             .eq("stripe_customer_id", subscription.customer)
             .order("updated_at", { ascending: false })
             .limit(1)
             .maybeSingle();
 
-          userId = existingSub?.user_id ?? null;
+          userId = existingSub?.clerk_user_id ?? null;
         }
 
         if (userId && typeof subscription.customer === "string") {
@@ -224,6 +309,8 @@ serve(async (req) => {
             stripeSubscriptionId: subscription.id,
             status,
             plan,
+            amountCents,
+            currency,
             currentPeriodStart: new Date(subscription.current_period_start * 1000).toISOString(),
             currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
           });
@@ -237,6 +324,7 @@ serve(async (req) => {
               stripe_subscription_id: subscription.id,
               status,
               plan,
+              amount_cents: amountCents,
             },
             source: "stripe_webhook",
           });
@@ -247,20 +335,26 @@ serve(async (req) => {
 
       case "customer.subscription.deleted": {
         const subscription = event.data.object as Stripe.Subscription;
+        const amountCents = getSubscriptionAmountCents(subscription);
+        const userIdFromMetadata = subscription.metadata?.clerk_user_id ?? subscription.metadata?.user_id ?? null;
 
         const { data: targetSubscription } = await supabaseAdmin
           .from("subscriptions")
-          .select("id, user_id")
+          .select("id, clerk_user_id")
           .eq("stripe_subscription_id", subscription.id)
           .order("updated_at", { ascending: false })
           .limit(1)
           .maybeSingle();
+
+        const targetUserId = userIdFromMetadata ?? targetSubscription?.clerk_user_id ?? null;
 
         if (targetSubscription?.id) {
           const { error } = await supabaseAdmin
             .from("subscriptions")
             .update({
               status: "cancelled",
+              amount_cents: amountCents,
+              currency: (subscription.currency ?? "brl").toLowerCase(),
               updated_at: new Date().toISOString(),
             })
             .eq("id", targetSubscription.id);
@@ -269,14 +363,135 @@ serve(async (req) => {
 
           await writeAuditLog(supabaseAdmin, {
             action: "billing.webhook_subscription_deleted",
-            actorUserId: targetSubscription.user_id,
+            actorUserId: targetUserId,
             metadata: {
               event_id: event.id,
               stripe_subscription_id: subscription.id,
+              amount_cents: amountCents,
             },
             source: "stripe_webhook",
           });
         }
+
+        if (targetUserId) {
+          const companyId = await getCompanyIdByClerkUserId(supabaseAdmin, targetUserId);
+          if (companyId) {
+            await incrementSnapshotMetric(
+              supabaseAdmin,
+              companyId,
+              getCurrentMonthDate(),
+              "churned_mrr",
+              amountCents / 100,
+            );
+          }
+        }
+
+        break;
+      }
+
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object as Stripe.Invoice;
+        if (typeof invoice.subscription !== "string") {
+          break;
+        }
+
+        let userId: string | null = null;
+
+        try {
+          const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
+          userId = subscription.metadata?.clerk_user_id ?? subscription.metadata?.user_id ?? null;
+        } catch (subscriptionError) {
+          logger.error("webhook.invoice_subscription_lookup_failed", {
+            event_id: event.id,
+            invoice_id: invoice.id,
+            stripe_subscription_id: invoice.subscription,
+            message: subscriptionError instanceof Error ? subscriptionError.message : String(subscriptionError),
+          });
+        }
+
+        if (!userId) {
+          const { data: existingSub } = await supabaseAdmin
+            .from("subscriptions")
+            .select("clerk_user_id")
+            .eq("stripe_subscription_id", invoice.subscription)
+            .order("updated_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          userId = existingSub?.clerk_user_id ?? null;
+        }
+
+        if (!userId) {
+          break;
+        }
+
+        const companyId = await getCompanyIdByClerkUserId(supabaseAdmin, userId);
+        if (!companyId) {
+          break;
+        }
+
+        const periodStart = typeof (invoice as { period_start?: number }).period_start === "number"
+          ? (invoice as { period_start: number }).period_start
+          : invoice.created;
+        const monthDate = getMonthDate(periodStart);
+        const amountPaid = (invoice.amount_paid ?? 0) / 100;
+
+        const { data: existingSnapshot, error: existingSnapshotError } = await supabaseAdmin
+          .from("revenue_snapshots")
+          .select("new_mrr, expansion_mrr, churned_mrr")
+          .eq("company_id", companyId)
+          .eq("date", monthDate)
+          .maybeSingle();
+
+        if (existingSnapshotError) throw existingSnapshotError;
+
+        const { error: snapshotUpsertError } = await supabaseAdmin
+          .from("revenue_snapshots")
+          .upsert(
+            {
+              company_id: companyId,
+              date: monthDate,
+              mrr: amountPaid,
+              arr: amountPaid * 12,
+              new_mrr: existingSnapshot?.new_mrr ?? 0,
+              expansion_mrr: existingSnapshot?.expansion_mrr ?? 0,
+              churned_mrr: existingSnapshot?.churned_mrr ?? 0,
+              source: "stripe",
+            },
+            { onConflict: "company_id,date" },
+          );
+
+        if (snapshotUpsertError) throw snapshotUpsertError;
+
+        await writeAuditLog(supabaseAdmin, {
+          action: "billing.webhook_invoice_payment_succeeded",
+          actorUserId: userId,
+          metadata: {
+            event_id: event.id,
+            invoice_id: invoice.id,
+            stripe_subscription_id: invoice.subscription,
+            amount_paid: invoice.amount_paid ?? 0,
+            month: monthDate,
+          },
+          source: "stripe_webhook",
+        });
+
+        break;
+      }
+
+      case "invoice.payment_failed": {
+        const invoice = event.data.object as Stripe.Invoice;
+        await writeAuditLog(supabaseAdmin, {
+          action: "stripe.invoice.payment_failed",
+          metadata: {
+            event_id: event.id,
+            invoice_id: invoice.id,
+            customer: invoice.customer,
+            subscription: invoice.subscription,
+            amount_due: invoice.amount_due,
+          },
+          source: "stripe_webhook",
+        });
 
         break;
       }

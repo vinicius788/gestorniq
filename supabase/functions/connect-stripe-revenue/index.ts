@@ -72,7 +72,7 @@ serve(async (req) => {
     let companyQuery = supabaseClient
       .from("companies")
       .select("id")
-      .eq("user_id", user.id);
+      .eq("clerk_user_id", user.id);
 
     if (companyIdFromBody) {
       companyQuery = companyQuery.eq("id", companyIdFromBody);

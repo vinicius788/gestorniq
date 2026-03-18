@@ -1,14 +1,17 @@
-import { useState, useEffect, createContext, useContext, ReactNode, useCallback } from 'react';
+import { useState, useEffect, createContext, useContext, ReactNode, useCallback, useRef } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { useAuth as useClerkAuth, useSignIn, useSignUp, useUser } from '@clerk/clerk-react';
-import { supabase } from '@/integrations/supabase/client';
-import { AUTH_CONFIG, AUTH_PROVIDER, CLERK_ONLY_MODE } from '@/lib/auth-config';
+import {
+  setSupabaseAccessTokenProvider,
+  clearSupabaseAccessTokenProvider,
+} from '@/integrations/supabase/client';
+import { AUTH_CONFIG } from '@/lib/auth-config';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  authProvider: 'supabase' | 'clerk_supabase_bridge';
+  authProvider: 'clerk_supabase_bridge';
   signUp: (
     email: string,
     password: string,
@@ -25,23 +28,13 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const CLERK_PUBLISHABLE_KEY = AUTH_CONFIG.clerkPublishableKey;
 const CLERK_SUPABASE_JWT_TEMPLATE = AUTH_CONFIG.clerkSupabaseJwtTemplate;
-const CLERK_SUPABASE_PROVIDER = AUTH_CONFIG.clerkSupabaseProvider;
 const CLERK_FRONTEND_API_URL = AUTH_CONFIG.clerkFrontendApiUrl;
-const AUTH_REDIRECT_ORIGIN = import.meta.env.VITE_AUTH_REDIRECT_ORIGIN?.trim();
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '');
-const isHttpUrl = (value: string) => {
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-  } catch {
-    return false;
-  }
-};
 
 const getAuthOrigin = () => {
-  if (AUTH_REDIRECT_ORIGIN && isHttpUrl(AUTH_REDIRECT_ORIGIN)) {
-    return trimTrailingSlash(AUTH_REDIRECT_ORIGIN);
+  if (AUTH_CONFIG.appUrl) {
+    return trimTrailingSlash(AUTH_CONFIG.appUrl);
   }
   if (typeof window !== 'undefined' && window.location?.origin) {
     return window.location.origin;
@@ -55,25 +48,6 @@ const getAuthUrl = (path: string) => {
 };
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
-const decodeBase64Url = (value: string) => {
-  const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
-  const padding = normalized.length % 4;
-  const padded = padding === 0 ? normalized : `${normalized}${'='.repeat(4 - padding)}`;
-  return atob(padded);
-};
-
-const getTokenIssuer = (token: string): string | null => {
-  const payload = token.split('.')[1];
-  if (!payload) return null;
-
-  try {
-    const decodedPayload = decodeBase64Url(payload);
-    const parsedPayload = JSON.parse(decodedPayload) as { iss?: string };
-    return typeof parsedPayload.iss === 'string' ? parsedPayload.iss : null;
-  } catch {
-    return null;
-  }
-};
 
 const getErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message) {
@@ -139,242 +113,67 @@ const toSupabaseLikeUserFromClerk = (clerkUser: ClerkUserLike): User => {
   } as User;
 };
 
-function SupabaseAuthProviderImpl({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
-      setUser(nextSession?.user ?? null);
-      setLoading(false);
-    });
-
-    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
-      setSession(currentSession);
-      setUser(currentSession?.user ?? null);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const signUp = async (email: string, password: string, fullName?: string) => {
-    const normalizedEmail = normalizeEmail(email);
-    const redirectUrl = getAuthUrl('/dashboard');
-
-    const { data, error } = await supabase.auth.signUp({
-      email: normalizedEmail,
-      password,
-      options: {
-        emailRedirectTo: redirectUrl,
-        data: {
-          full_name: fullName,
-        },
-      },
-    });
-
-    return {
-      error: error as Error | null,
-      needsEmailConfirmation: !data.session,
-    };
-  };
-
-  const signIn = async (email: string, password: string) => {
-    const normalizedEmail = normalizeEmail(email);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: normalizedEmail,
-      password,
-    });
-
-    return { error: error as Error | null };
-  };
-
-  const signInWithGoogle = async (redirectPath = '/dashboard') => {
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: getAuthUrl(redirectPath),
-        skipBrowserRedirect: true,
-      },
-    });
-
-    if (error) {
-      return { error: error as Error | null };
-    }
-
-    if (data?.url) {
-      window.location.assign(data.url);
-      return { error: null };
-    }
-
-    return { error: new Error('Could not start Google authentication.') };
-  };
-
-  const resendConfirmationEmail = async (email: string, redirectPath = '/auth') => {
-    const normalizedEmail = normalizeEmail(email);
-    const safeRedirectPath = redirectPath.startsWith('/') ? redirectPath : `/${redirectPath}`;
-
-    if (!normalizedEmail) {
-      return { error: new Error('Email is required.') };
-    }
-
-    const { error } = await supabase.auth.resend({
-      type: 'signup',
-      email: normalizedEmail,
-      options: {
-        emailRedirectTo: getAuthUrl(safeRedirectPath),
-      },
-    });
-
-    return { error: error as Error | null };
-  };
-
-  const requestPasswordReset = async (email: string, redirectPath = '/auth') => {
-    const normalizedEmail = normalizeEmail(email);
-    const safeRedirectPath = redirectPath.startsWith('/') ? redirectPath : `/${redirectPath}`;
-
-    if (!normalizedEmail) {
-      return { error: new Error('Email is required.') };
-    }
-
-    const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
-      redirectTo: getAuthUrl(safeRedirectPath),
-    });
-
-    return { error: error as Error | null };
-  };
-
-  const signOut = async () => {
-    await supabase.auth.signOut();
-  };
-
-  return (
-    <AuthContext.Provider value={{
-      user,
-      session,
-      loading,
-      authProvider: 'supabase',
-      signUp,
-      signIn,
-      signInWithGoogle,
-      resendConfirmationEmail,
-      requestPasswordReset,
-      signOut,
-    }}>
-      {children}
-    </AuthContext.Provider>
-  );
-}
-
 function ClerkAuthProviderImpl({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [supabaseLoading, setSupabaseLoading] = useState(true);
-  const [bridgingSession, setBridgingSession] = useState(false);
+  const [session] = useState<Session | null>(null);
+  const tokenProviderRef = useRef<(() => Promise<string | null>) | null>(null);
 
   const { isLoaded: clerkLoaded, isSignedIn: isClerkSignedIn, getToken, signOut: clerkSignOut } = useClerkAuth();
   const { isLoaded: clerkUserLoaded, user: clerkUser } = useUser();
   const { isLoaded: signInLoaded, signIn: clerkSignIn, setActive: setSignInActive } = useSignIn();
   const { isLoaded: signUpLoaded, signUp: clerkSignUp, setActive: setSignUpActive } = useSignUp();
 
-  useEffect(() => {
-    if (CLERK_ONLY_MODE) {
-      setSession(null);
-      setSupabaseLoading(false);
-      return;
-    }
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
-      setUser(nextSession?.user ?? null);
-      setSupabaseLoading(false);
-    });
-
-    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
-      setSession(currentSession);
-      setUser(currentSession?.user ?? null);
-      setSupabaseLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!CLERK_ONLY_MODE || !clerkUserLoaded) return;
-
-    if (isClerkSignedIn && clerkUser) {
-      setUser(toSupabaseLikeUserFromClerk(clerkUser as ClerkUserLike));
-    } else {
-      setUser(null);
-    }
-  }, [clerkUserLoaded, isClerkSignedIn, clerkUser]);
-
-  const bridgeClerkToSupabase = useCallback(async (): Promise<Error | null> => {
-    if (CLERK_ONLY_MODE) {
-      return null;
-    }
-
-    const token = await getToken({ template: CLERK_SUPABASE_JWT_TEMPLATE });
-    if (!token) {
-      return new Error('Missing Clerk token. Configure a Clerk JWT template for Supabase.');
-    }
-
-    const issuer = getTokenIssuer(token);
-    const candidateProviders = [CLERK_SUPABASE_PROVIDER, issuer, 'clerk'].filter(
-      (value, index, source): value is string => Boolean(value) && source.indexOf(value) === index,
-    );
-
-    let lastError: Error | null = null;
-
-    for (const provider of candidateProviders) {
-      const { error } = await supabase.auth.signInWithIdToken({ provider, token });
-      if (!error) {
-        return null;
-      }
-      lastError = error as Error;
-    }
-
-    const lastMessage = lastError?.message.toLowerCase() ?? '';
-    if (lastMessage.includes('custom oidc provider') && lastMessage.includes('not allowed')) {
-      return new Error(
-        'Supabase is not configured to trust Clerk yet. Enable Clerk (OIDC) in Supabase Auth providers and retry login.',
-      );
-    }
-
+  const getClerkSupabaseToken = useCallback(async (): Promise<string | null> => {
     return (
-      lastError ??
-      new Error('Could not exchange Clerk token for a Supabase session. Check Clerk issuer/JWT template and Supabase provider configuration.')
+      (await getToken({ template: CLERK_SUPABASE_JWT_TEMPLATE })) ||
+      (await getToken()) ||
+      null
     );
   }, [getToken]);
 
   useEffect(() => {
-    if (CLERK_ONLY_MODE) return;
-    if (!clerkLoaded || !isClerkSignedIn || session) return;
+    if (!clerkLoaded) return;
 
-    let cancelled = false;
+    if (!isClerkSignedIn) {
+      clearSupabaseAccessTokenProvider();
+      tokenProviderRef.current = null;
+      return;
+    }
 
-    const syncSession = async () => {
-      setBridgingSession(true);
-      try {
-        const error = await bridgeClerkToSupabase();
-        if (!cancelled && error) {
-          console.error('Failed to exchange Clerk token for Supabase session:', error.message);
-        }
-      } finally {
-        if (!cancelled) {
-          setBridgingSession(false);
-        }
-      }
-    };
-
-    syncSession();
+    tokenProviderRef.current = getClerkSupabaseToken;
+    setSupabaseAccessTokenProvider(async () => {
+      const provider = tokenProviderRef.current;
+      if (!provider) return null;
+      return provider();
+    });
 
     return () => {
-      cancelled = true;
+      clearSupabaseAccessTokenProvider();
+      tokenProviderRef.current = null;
     };
-  }, [clerkLoaded, isClerkSignedIn, session, bridgeClerkToSupabase]);
+  }, [clerkLoaded, isClerkSignedIn, getClerkSupabaseToken]);
+
+  useEffect(() => {
+    if (!clerkUserLoaded) return;
+
+    if (isClerkSignedIn && clerkUser) {
+      setUser(toSupabaseLikeUserFromClerk(clerkUser as ClerkUserLike));
+      return;
+    }
+
+    setUser(null);
+  }, [clerkUserLoaded, isClerkSignedIn, clerkUser]);
+
+  const ensureSupabaseTokenReady = useCallback(async (): Promise<Error | null> => {
+    const token = await getClerkSupabaseToken();
+    if (!token) {
+      return new Error(
+        `Missing Clerk token. Configure Clerk JWT template "${CLERK_SUPABASE_JWT_TEMPLATE}" for Supabase.`,
+      );
+    }
+
+    return null;
+  }, [getClerkSupabaseToken]);
 
   const signUp = async (email: string, password: string, fullName?: string) => {
     if (!signUpLoaded || !clerkSignUp || !setSignUpActive) {
@@ -396,7 +195,7 @@ function ClerkAuthProviderImpl({ children }: { children: ReactNode }) {
 
       if (signUpAttempt.status === 'complete' && signUpAttempt.createdSessionId) {
         await setSignUpActive({ session: signUpAttempt.createdSessionId });
-        const bridgeError = await bridgeClerkToSupabase();
+        const bridgeError = await ensureSupabaseTokenReady();
         return {
           error: bridgeError,
           needsEmailConfirmation: false,
@@ -434,7 +233,7 @@ function ClerkAuthProviderImpl({ children }: { children: ReactNode }) {
       }
 
       await setSignInActive({ session: signInAttempt.createdSessionId });
-      const bridgeError = await bridgeClerkToSupabase();
+      const bridgeError = await ensureSupabaseTokenReady();
       return { error: bridgeError };
     } catch (error) {
       return { error: toError(error, 'Could not sign in with Clerk.') };
@@ -511,22 +310,13 @@ function ClerkAuthProviderImpl({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    if (CLERK_ONLY_MODE) {
-      setSession(null);
-      setUser(null);
-      await clerkSignOut();
-      return;
-    }
-
-    await Promise.all([
-      supabase.auth.signOut(),
-      clerkSignOut(),
-    ]);
+    clearSupabaseAccessTokenProvider();
+    tokenProviderRef.current = null;
+    setUser(null);
+    await clerkSignOut();
   };
 
-  const loading = CLERK_ONLY_MODE
-    ? !clerkLoaded || !clerkUserLoaded || (isClerkSignedIn && !clerkUser)
-    : supabaseLoading || !clerkLoaded || bridgingSession;
+  const loading = !clerkLoaded || !clerkUserLoaded || (isClerkSignedIn && !clerkUser);
 
   return (
     <AuthContext.Provider value={{
@@ -547,9 +337,9 @@ function ClerkAuthProviderImpl({ children }: { children: ReactNode }) {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  if (AUTH_CONFIG.rawClerkOnlyMode) {
-    console.warn(
-      'VITE_CLERK_ONLY_MODE=true is ignored. Clerk -> Supabase bridge will be used.',
+  if (AUTH_CONFIG.isAuthMisconfigured) {
+    console.error(
+      'Clerk is required but not configured. Set VITE_CLERK_PUBLISHABLE_KEY in frontend env vars.',
     );
   }
 
@@ -557,17 +347,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return <ClerkAuthProviderImpl>{children}</ClerkAuthProviderImpl>;
   }
 
-  return <SupabaseAuthProviderImpl>{children}</SupabaseAuthProviderImpl>;
+  throw new Error('Clerk-only auth mode requires VITE_CLERK_PUBLISHABLE_KEY.');
 }
 
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
-  }
-  if (context.authProvider !== AUTH_PROVIDER) {
-    // Keep a deterministic runtime hint when env/auth setup drifts.
-    console.warn(`Auth provider mismatch detected. Expected ${AUTH_PROVIDER}, got ${context.authProvider}.`);
   }
   return context;
 }

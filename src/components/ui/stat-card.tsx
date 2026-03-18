@@ -27,8 +27,17 @@ export function StatCard({
   className,
 }: StatCardProps) {
   return (
-    <div className={cn("metric-card", className)}>
-      <div className="flex items-start justify-between gap-4">
+    <div
+      className={cn(
+        "group relative cursor-default overflow-hidden rounded-xl border border-white/10 bg-white/5 p-6 transition-all duration-300 hover:border-white/20 hover:bg-white/[0.08] hover:shadow-lg hover:shadow-black/20",
+        className,
+      )}
+    >
+      <div
+        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+        style={{ background: "radial-gradient(circle at 50% 0%, rgba(59,130,246,0.06), transparent 70%)" }}
+      />
+      <div className="relative flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="mb-3 flex items-center gap-2">
             <p className="text-sm font-medium text-muted-foreground">{label}</p>
@@ -65,7 +74,7 @@ export function StatCard({
         </div>
 
         {Icon && (
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary transition-colors duration-300 group-hover:bg-primary/20">
             <Icon className="h-5 w-5" />
           </div>
         )}

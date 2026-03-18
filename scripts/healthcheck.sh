@@ -15,6 +15,22 @@ runtime_env="$(get_runtime_env)"
 strict_mode=false
 app_url_defaulted=false
 
+# Allow ops scripts to run with frontend-style VITE_* vars in local/dev.
+if [[ -z "${SUPABASE_URL:-}" && -n "${VITE_SUPABASE_URL:-}" ]]; then
+  SUPABASE_URL="${VITE_SUPABASE_URL}"
+  export SUPABASE_URL
+fi
+
+if [[ -z "${SUPABASE_ANON_KEY:-}" ]]; then
+  if [[ -n "${VITE_SUPABASE_ANON_KEY:-}" ]]; then
+    SUPABASE_ANON_KEY="${VITE_SUPABASE_ANON_KEY}"
+    export SUPABASE_ANON_KEY
+  elif [[ -n "${VITE_SUPABASE_PUBLISHABLE_KEY:-}" ]]; then
+    SUPABASE_ANON_KEY="${VITE_SUPABASE_PUBLISHABLE_KEY}"
+    export SUPABASE_ANON_KEY
+  fi
+fi
+
 if is_release_env; then
   strict_mode=true
 fi
@@ -154,7 +170,11 @@ if [[ -n "${APP_URL:-}" ]]; then
   if [[ "${app_url_defaulted}" == true ]]; then
     echo "[OK] App URL defaulted for non-release checks (${APP_URL})"
   else
-    check_command "App URL reachable" "curl -fsS '${APP_URL}' >/dev/null"
+    if curl -fsS "${APP_URL}" >/dev/null; then
+      echo "[OK] App URL reachable"
+    else
+      report_missing "App URL reachable"
+    fi
   fi
 fi
 
@@ -176,6 +196,16 @@ if [[ -n "${SUPABASE_URL:-}" && -n "${SUPABASE_ANON_KEY:-}" ]]; then
   for table_name in "${REQUIRED_TABLES[@]}"; do
     check_table_exists "$table_name"
   done
+
+  if [[ -n "${VITE_CLERK_PUBLISHABLE_KEY:-${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}}" ]]; then
+    if bash "${SCRIPT_DIR}/check-clerk-bridge.sh"; then
+      echo "[OK] Clerk -> Supabase bridge precheck passed"
+    else
+      report_missing "Clerk -> Supabase bridge precheck failed"
+    fi
+  else
+    echo "[INFO] Clerk publishable key not set; skipping Clerk bridge precheck."
+  fi
 else
   report_missing "Skipping required function/table checks because SUPABASE_URL or SUPABASE_ANON_KEY is missing"
 fi

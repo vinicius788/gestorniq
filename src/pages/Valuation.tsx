@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, Calculator, DollarSign, Info, Loader2, Save, TrendingUp, Users } from "lucide-react";
+import { AlertCircle, Calculator, CircleHelp, DollarSign, Info, Loader2, Save, TrendingUp, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -10,6 +10,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { ChartCardSkeleton, StatCardSkeleton } from "@/components/ui/skeletons";
 import { MoneyValue } from "@/components/ui/money-value";
 import { FormattedPercent } from "@/components/ui/formatted-value";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { InvestorPackActions } from "@/components/dashboard/InvestorPackActions";
 import { useMetrics } from "@/hooks/useMetrics";
 import { useCompany } from "@/hooks/useCompany";
@@ -23,6 +24,7 @@ export default function Valuation() {
   const { metrics, revenueSnapshots, userMetrics, valuationSnapshots, calculateValuation, loading, error } = useMetrics();
   const { isDemoMode } = useApp();
   const [saving, setSaving] = useState(false);
+  const [rangeHelpOpen, setRangeHelpOpen] = useState(false);
 
   const currency = (company?.currency || "USD") as Currency;
   const suggestedMultiple = metrics.suggestedMultiple;
@@ -184,22 +186,52 @@ export default function Valuation() {
         <div className="mb-5 flex items-center gap-2">
           <TrendingUp className="h-5 w-5 text-primary" />
           <h3 className="text-lg font-semibold text-foreground">Valuation Range</h3>
+          <Popover open={rangeHelpOpen} onOpenChange={setRangeHelpOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                aria-label="How valuation range is calculated"
+                className="inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                onMouseEnter={() => setRangeHelpOpen(true)}
+                onMouseLeave={() => setRangeHelpOpen(false)}
+              >
+                <CircleHelp className="h-4 w-4" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="start"
+              className="w-[320px] border-border/60 bg-[#1e2433] p-3 text-[13px] text-white"
+              onMouseEnter={() => setRangeHelpOpen(true)}
+              onMouseLeave={() => setRangeHelpOpen(false)}
+            >
+              <p className="font-semibold text-white">How we calculate this</p>
+              <p className="mt-2 leading-relaxed text-white/90">
+                Conservative: 10x ARR · Base Case: 13x ARR · Upside: 15x ARR
+              </p>
+              <p className="mt-2 leading-relaxed text-white/75">
+                Multiples based on current SaaS market benchmarks for early-stage B2B companies.
+              </p>
+            </PopoverContent>
+          </Popover>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="rounded-xl border border-border bg-muted/30 p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Conservative</p>
+            <p className="mt-1 text-xs text-muted-foreground">{Math.max(1, multiple[0] - 2)}x ARR</p>
             <p className="mt-2 text-2xl font-semibold text-foreground tabular-nums">
               <MoneyValue value={minRange} currency={currency} abbreviate size="2xl" />
             </p>
           </div>
           <div className="rounded-xl border border-primary/40 bg-primary/10 p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-primary">Base Case</p>
+            <p className="mt-1 text-xs text-muted-foreground">{multiple[0]}x ARR</p>
             <p className="mt-2 text-2xl font-semibold text-foreground tabular-nums">
               <MoneyValue value={valuation} currency={currency} abbreviate size="2xl" />
             </p>
           </div>
           <div className="rounded-xl border border-border bg-muted/30 p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Upside</p>
+            <p className="mt-1 text-xs text-muted-foreground">{multiple[0] + 2}x ARR</p>
             <p className="mt-2 text-2xl font-semibold text-foreground tabular-nums">
               <MoneyValue value={maxRange} currency={currency} abbreviate size="2xl" />
             </p>

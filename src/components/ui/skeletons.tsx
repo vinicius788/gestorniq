@@ -2,40 +2,48 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export function StatCardSkeleton() {
   return (
-    <div className="metric-card">
-      <div className="flex items-start justify-between">
-        <div className="space-y-3">
-          <Skeleton className="h-4 w-32" />
-          <Skeleton className="h-10 w-40" />
-          <Skeleton className="h-5 w-24 rounded-full" />
-        </div>
-        <Skeleton className="h-10 w-10 rounded-xl" />
-      </div>
+    <div className="animate-pulse rounded-xl border border-white/5 bg-white/5 p-6">
+      <div className="h-3 w-16 rounded bg-white/10 mb-3" />
+      <div className="h-8 w-24 rounded bg-white/10 mb-2" />
+      <div className="h-3 w-12 rounded bg-white/10" />
+    </div>
+  );
+}
+
+function ChartBarsSkeleton() {
+  const bars = [40, 55, 45, 70, 60, 80, 65, 90, 75, 85, 70, 95];
+
+  return (
+    <div className="flex h-32 items-end gap-1">
+      {bars.map((height, index) => (
+        <div
+          key={`${height}-${index}`}
+          className="flex-1 rounded-sm bg-white/10"
+          style={{ height: `${height}%` }}
+        />
+      ))}
     </div>
   );
 }
 
 export function ChartCardSkeleton() {
   return (
-    <div className="metric-card space-y-5">
-      <div className="space-y-2">
-        <Skeleton className="h-5 w-44" />
-        <Skeleton className="h-4 w-64" />
-      </div>
-      <Skeleton className="h-[280px] w-full rounded-xl" />
+    <div className="animate-pulse rounded-xl border border-white/5 bg-white/5 p-6">
+      <div className="h-3 w-24 rounded bg-white/10 mb-6" />
+      <ChartBarsSkeleton />
     </div>
   );
 }
 
 export function TableSkeleton() {
   return (
-    <div className="metric-card space-y-4">
-      <Skeleton className="h-5 w-40" />
+    <div className="animate-pulse rounded-xl border border-white/5 bg-white/5 p-6">
+      <div className="h-3 w-24 rounded bg-white/10 mb-6" />
       <div className="space-y-2">
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full bg-white/10" />
+        <Skeleton className="h-10 w-full bg-white/10" />
+        <Skeleton className="h-10 w-full bg-white/10" />
+        <Skeleton className="h-10 w-full bg-white/10" />
       </div>
     </div>
   );

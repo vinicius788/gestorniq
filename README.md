@@ -6,7 +6,7 @@ Web SaaS for founders to track SaaS metrics (MRR/ARR, user growth, valuation, fo
 - React + TypeScript + Vite
 - Supabase (Auth, Postgres, RLS, Edge Functions)
 - Stripe (Checkout, Billing Portal, Webhook)
-- Clerk (auth provider with Supabase session bridge)
+- Clerk (JWT auth provider for Supabase data access)
 
 ## Local development
 ```bash
@@ -21,6 +21,7 @@ npm run test
 npm run build
 npm run security:scan-secrets
 npm run ops:healthcheck
+npm run ops:auth-bridge
 npm run ops:db-restore-drill -- --env staging
 npm run ci:check
 npm run audit:high
@@ -51,7 +52,7 @@ vercel link
 # set production envs in Vercel (one-time)
 vercel env add VITE_SUPABASE_URL production
 vercel env add VITE_SUPABASE_PUBLISHABLE_KEY production
-vercel env add VITE_AUTH_REDIRECT_ORIGIN production
+vercel env add VITE_APP_URL production
 vercel env add VITE_CLERK_PUBLISHABLE_KEY production
 vercel env add VITE_CLERK_SUPABASE_JWT_TEMPLATE production
 
@@ -104,10 +105,11 @@ Frontend variables:
 - `VITE_SUPABASE_PROJECT_ID`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
 - `VITE_SUPABASE_URL`
-- `VITE_AUTH_REDIRECT_ORIGIN` (optional but recommended in production, e.g. `https://tickrify.com`)
+- `VITE_APP_URL` (required in production, e.g. `https://gestorniq.vercel.app`)
+- `VITE_AUTH_REDIRECT_ORIGIN` (legacy alias for older builds)
 - `VITE_SENTRY_DSN` (optional)
-- `VITE_CLERK_PUBLISHABLE_KEY` (if Clerk is enabled)
-- `VITE_CLERK_SUPABASE_JWT_TEMPLATE`
+- `VITE_CLERK_PUBLISHABLE_KEY` (required; auth runs in Clerk-only mode)
+- `VITE_CLERK_SUPABASE_JWT_TEMPLATE` (use `supabase` unless your Clerk template name differs)
 
 Supabase Edge Function secrets:
 - `SUPABASE_URL`
@@ -126,8 +128,8 @@ Supabase CLI migration push:
 - `SUPABASE_DB_PASSWORD` (optional but recommended for non-interactive `supabase:db:push`)
 
 Recommended `CORS_ALLOWED_ORIGINS`:
-- production: `https://app.gestorniq.com`
-- staging: `https://staging.gestorniq.com`
+- production: `https://gestorniq.vercel.app`
+- staging: `https://staging.gestorniq.vercel.app`
 - optional staging previews only: `https://*.vercel.app`
 
 Do not enable `CORS_ALLOW_ALL_LOCAL` in production.

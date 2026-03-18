@@ -24,9 +24,14 @@ export default function Auth() {
   const isDemoRequested = searchParams.get('demo') === '1';
   const oauthError = searchParams.get('auth_error');
   const clerkOnlyMode = AUTH_CONFIG.clerkOnlyMode;
+  const clerkEnabled = AUTH_CONFIG.isClerkEnabled;
   const postAuthPath = isDemoRequested ? '/dashboard?demo=1' : '/dashboard';
   const isAlreadySignedInError = (message: string) =>
     message.toLowerCase().includes('already signed in');
+  const isBridgeConfigurationError = (message: string) =>
+    message.includes('missing clerk token') ||
+    message.includes('invalid jwt') ||
+    message.includes('authentication required');
 
   const pitch = {
     label: 'Fundraising-ready in minutes',
@@ -114,13 +119,20 @@ export default function Auth() {
         if (error) {
           const errorMessage = error.message.toLowerCase();
 
+          if (isBridgeConfigurationError(errorMessage)) {
+            toast.error(
+              'Login is blocked by Clerk JWT configuration. Check the Clerk template used for Supabase.',
+            );
+            return;
+          }
+
           if (errorMessage.includes('failed to fetch')) {
             toast.error('Could not reach authentication server. Please check your connection and try again.');
             return;
           }
 
           if (errorMessage.includes('not authorized') || errorMessage.includes('unauthorized')) {
-            if (clerkOnlyMode) {
+            if (clerkOnlyMode || clerkEnabled) {
               toast.error('Password sign-in is not enabled for this Clerk project. Use Continue with Google or enable Email + Password in Clerk.');
             } else {
               toast.error(t.auth.invalidCredentials);
@@ -156,6 +168,13 @@ export default function Auth() {
         );
         if (error) {
           const signupErrorMessage = error.message.toLowerCase();
+          if (isBridgeConfigurationError(signupErrorMessage)) {
+            toast.error(
+              'Account creation is blocked by Clerk JWT configuration. Check the Clerk template used for Supabase.',
+            );
+            return;
+          }
+
           if (clerkOnlyMode && (signupErrorMessage.includes('not authorized') || signupErrorMessage.includes('strategy') || signupErrorMessage.includes('password'))) {
             toast.error('Email/password sign-up is disabled in Clerk. Enable Email + Password in Clerk or use Continue with Google.');
             return;

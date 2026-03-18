@@ -1,36 +1,34 @@
 import { Link } from 'react-router-dom';
-import { Clock, Zap } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { useTrial } from '@/hooks/useTrial';
 
-export function TrialBanner() {
+interface TrialBannerProps {
+  className?: string;
+}
+
+export function TrialBanner({ className }: TrialBannerProps) {
   const { isTrialActive, daysRemaining, loading } = useTrial();
 
   if (loading || !isTrialActive) return null;
 
   const isUrgent = daysRemaining <= 1;
+  const label = isUrgent
+    ? 'Trial ends today'
+    : `${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} left in trial`;
 
   return (
-    <div className={`px-4 py-2 text-center text-sm ${
-      isUrgent 
-        ? 'bg-destructive/20 border-b border-destructive/30' 
-        : 'bg-warning/20 border-b border-warning/30'
-    }`}>
-      <div className="flex items-center justify-center gap-2 flex-wrap">
-        <Clock className={`h-4 w-4 ${isUrgent ? 'text-destructive' : 'text-warning'}`} />
-        <span className="text-foreground">
-          {isUrgent 
-            ? 'Your trial ends today!' 
-            : `${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} left in your trial`
-          }
-        </span>
-        <Link to="/dashboard/billing">
-          <Button size="sm" variant="outline" className="h-7 text-xs ml-2">
-            <Zap className="h-3 w-3 mr-1" />
-            Subscribe now
-          </Button>
-        </Link>
-      </div>
-    </div>
+    <Link
+      to="/dashboard/billing"
+      className={cn(
+        "group inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs text-amber-400 transition-colors hover:border-amber-400/30 hover:bg-amber-500/15",
+        className,
+      )}
+    >
+      <span className="h-1 w-1 rounded-full bg-amber-400 animate-pulse" />
+      <span className="hidden xl:inline">{label}</span>
+      <span className="ml-1 font-semibold text-amber-300 transition-colors group-hover:text-amber-200">
+        Upgrade →
+      </span>
+    </Link>
   );
 }

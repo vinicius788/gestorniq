@@ -5,16 +5,7 @@ import { respondWithPublicError } from "../_shared/errors.ts";
 import { getCorsHeaders, getRequiredEnv, HttpError, jsonResponse } from "../_shared/http.ts";
 import { createRequestLogger } from "../_shared/logging.ts";
 import { enforceRateLimit } from "../_shared/rate-limit.ts";
-
-const normalizePlan = (
-  plan: string | null | undefined,
-  fallback: "free" | "standard" = "standard",
-) => {
-  const normalized = (plan ?? "").toLowerCase().trim();
-  if (!normalized) return fallback;
-  if (normalized === "free") return "free";
-  return "standard";
-};
+import { getPlanFromSubscription, getSubscriptionAmountCents, normalizePlan } from "../_shared/stripe-plans.ts";
 
 const RESPONSE_CACHE_HEADERS = {
   "Cache-Control": "private, max-age=30, stale-while-revalidate=30",
@@ -74,7 +65,7 @@ serve(async (req) => {
     const { data: currentSubscription, error: currentSubError } = await supabaseClient
       .from("subscriptions")
       .select("stripe_customer_id, stripe_subscription_id")
-      .eq("user_id", user.id)
+      .eq("clerk_user_id", user.id)
       .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -95,13 +86,16 @@ serve(async (req) => {
         .from("subscriptions")
         .update({
           status: "inactive",
+          plan: "free",
+          amount_cents: 0,
+          currency: "brl",
           stripe_customer_id: null,
           stripe_subscription_id: null,
           current_period_start: null,
           current_period_end: null,
           updated_at: new Date().toISOString(),
         })
-        .eq("user_id", user.id);
+        .eq("clerk_user_id", user.id);
 
       if (clearError) {
         logger.error("subscription.clear_failed", { message: clearError.message });
@@ -136,7 +130,7 @@ serve(async (req) => {
     const { data: dbSubscription, error: dbSubscriptionError } = await supabaseAdmin
       .from("subscriptions")
       .select("id, plan")
-      .eq("user_id", user.id)
+      .eq("clerk_user_id", user.id)
       .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -144,13 +138,17 @@ serve(async (req) => {
     if (dbSubscriptionError) throw new HttpError(500, dbSubscriptionError.message);
 
     const hasBillableSubscription = Boolean(resolvedSub);
+    const resolvedPlan = resolvedSub
+      ? getPlanFromSubscription(resolvedSub, "smart")
+      : normalizePlan(dbSubscription?.plan ?? null, hasBillableSubscription ? "smart" : "free");
+
     const syncPayload = {
-      user_id: user.id,
+      user_id: null,
+      clerk_user_id: user.id,
       status: resolvedSub?.status ?? "inactive",
-      plan: normalizePlan(
-        resolvedSub?.metadata?.plan ?? dbSubscription?.plan ?? null,
-        hasBillableSubscription ? "standard" : "free",
-      ),
+      plan: resolvedPlan,
+      amount_cents: resolvedSub ? getSubscriptionAmountCents(resolvedSub) : 0,
+      currency: resolvedSub?.currency?.toLowerCase() ?? "brl",
       stripe_customer_id: customerId,
       stripe_subscription_id: resolvedSub?.id ?? null,
       current_period_start: resolvedSub
@@ -180,7 +178,7 @@ serve(async (req) => {
     logger.done("subscription.synced", {
       subscribed: hasBillableSubscription,
       status: resolvedSub?.status ?? "inactive",
-      plan: syncPayload.plan,
+      plan: resolvedPlan,
     });
 
     return jsonResponse({

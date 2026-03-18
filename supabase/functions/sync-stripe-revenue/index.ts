@@ -180,7 +180,7 @@ function parseSinceIso(value: unknown): string | null {
 }
 
 async function hasActiveAccessForUser(supabaseAdmin: any, userId: string): Promise<boolean> {
-  const { data, error } = await supabaseAdmin.rpc("has_active_access", { user_uuid: userId });
+  const { data, error } = await supabaseAdmin.rpc("has_active_access", { user_clerk_id: userId });
   if (error) {
     throw new HttpError(500, `Failed to validate active access: ${error.message}`);
   }
@@ -246,7 +246,7 @@ serve(async (req) => {
     const months = Math.min(24, Math.max(3, Math.floor(monthsRaw)));
     const fullSync = body.full_sync === true;
 
-    let companyQuery = supabaseClient.from("companies").select("id").eq("user_id", user.id);
+    let companyQuery = supabaseClient.from("companies").select("id").eq("clerk_user_id", user.id);
     if (companyIdFromBody) {
       companyQuery = companyQuery.eq("id", companyIdFromBody);
     }

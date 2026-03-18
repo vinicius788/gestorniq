@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Calculator, PieChart, DollarSign, Loader2 } from "lucide-react";
+import { Calculator, PieChart, DollarSign } from "lucide-react";
 import { MoneyValue } from "@/components/ui/money-value";
 import { useMetrics } from "@/hooks/useMetrics";
 import { useCompany } from "@/hooks/useCompany";
 import { useApp } from "@/contexts/AppContext";
 import { calculateEquityValue } from "@/lib/calculations";
 import type { Currency } from "@/lib/format";
+import { ChartCardSkeleton, StatCardSkeleton } from "@/components/ui/skeletons";
 
 const equityOptions = [
   { percentage: 5, label: "5%" },
@@ -36,8 +37,17 @@ export default function EquityCalculator() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="page-section animate-fade-in">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+        </div>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <ChartCardSkeleton />
+          <ChartCardSkeleton />
+        </div>
       </div>
     );
   }

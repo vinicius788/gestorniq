@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { formatDate, type Currency } from "@/lib/format";
 import { timeframeLabels } from "@/lib/formatters";
 import { parseCsv } from "@/lib/csv";
+import { ChartCardSkeleton, StatCardSkeleton, TableSkeleton } from "@/components/ui/skeletons";
 import {
   normalizeRevenueSnapshotInput,
   type RevenueSnapshotInput,
@@ -189,8 +190,15 @@ export default function Revenue() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="page-section animate-fade-in">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+        </div>
+        <ChartCardSkeleton />
+        <TableSkeleton />
       </div>
     );
   }
@@ -200,10 +208,7 @@ export default function Revenue() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Revenue</h1>
-          <p className="text-muted-foreground">
-            Revenue breakdown and analytics
-            {isDemoMode && <span className="ml-2 text-warning">(Demo Mode)</span>}
-          </p>
+          <p className="text-muted-foreground">Revenue breakdown and analytics</p>
         </div>
         <div className="flex gap-2">
           <input

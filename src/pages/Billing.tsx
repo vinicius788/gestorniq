@@ -6,15 +6,8 @@ import { useTrial } from '@/hooks/useTrial';
 import { useCompany } from '@/hooks/useCompany';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
+import { PLAN_PRICES, formatPlanLabel, formatSubscriptionAmount } from '@/lib/stripe-plans';
 import { toast } from 'sonner';
-
-const formatPlanLabel = (plan?: string | null) => {
-  if (!plan || plan === 'free') return 'Standard';
-  return plan
-    .replace(/[_-]+/g, ' ')
-    .trim()
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-};
 
 type StandardPlan = {
   name: string;
@@ -66,6 +59,12 @@ function TrialStatusBanner({ isTrialExpired, daysRemaining, trial }: { isTrialEx
 function ActiveSubscriptionBanner({ subscription, onManage, managingPortal }: { subscription: any; onManage: () => void; managingPortal: boolean }) {
   if (!subscription || (subscription.status !== 'active' && subscription.status !== 'trialing')) return null;
 
+  const planFallbackCents = Math.round((PLAN_PRICES[(subscription.plan ?? '').toLowerCase()] ?? 0) * 100);
+  const amountCents = subscription.amount_cents && subscription.amount_cents > 0
+    ? subscription.amount_cents
+    : planFallbackCents;
+  const monthlyAmountLabel = `${formatSubscriptionAmount(amountCents, subscription.currency)}/month`;
+
   return (
     <div className="mb-8 p-6 rounded-xl border bg-success/10 border-success/20">
       <div className="flex items-start gap-4">
@@ -80,8 +79,11 @@ function ActiveSubscriptionBanner({ subscription, onManage, managingPortal }: { 
               : 'Your subscription is active. Thank you for subscribing!'
             }
           </p>
+          <p className="text-sm text-muted-foreground mt-2">
+            Billing amount: {monthlyAmountLabel}
+          </p>
           {subscription.current_period_end && (
-            <p className="text-sm text-muted-foreground mt-2">
+            <p className="text-sm text-muted-foreground mt-1">
               Next billing: {new Date(subscription.current_period_end).toLocaleDateString()}
             </p>
           )}
@@ -165,7 +167,7 @@ export default function Billing() {
 
     try {
       const { data, error } = await supabase.functions.invoke('create-checkout', {
-        body: { plan: 'standard', company_id: company.id },
+        body: { plan: 'standard', planName: 'smart', company_id: company.id },
       });
 
       if (error) throw new Error(error.message || 'Failed to create checkout session');

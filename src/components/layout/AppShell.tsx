@@ -16,7 +16,7 @@ export function AppShell({
   onDismissSidebar,
 }: AppShellProps) {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex h-screen overflow-hidden bg-background">
       {sidebarOpen && (
         <button
           type="button"
@@ -28,9 +28,9 @@ export function AppShell({
 
       {sidebar}
 
-      <div className="lg:pl-72">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {header}
-        <main className="px-4 pb-8 pt-6 sm:px-6 lg:px-8">
+        <main className="flex-1 min-w-0 overflow-y-auto px-4 pb-8 pt-6 sm:px-6 lg:px-8">
           <div className="app-shell-container">{children}</div>
         </main>
       </div>

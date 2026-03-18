@@ -6,7 +6,8 @@ export type DataSourceType = 'demo' | 'manual' | 'csv' | 'stripe';
 
 export interface Company {
   id: string;
-  user_id: string;
+  user_id: string | null;
+  clerk_user_id: string;
   name: string;
   currency: string;
   created_at: string;
@@ -27,9 +28,8 @@ interface CompanyContextType {
 
 const CompanyContext = createContext<CompanyContextType | undefined>(undefined);
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const isUuid = (value: string) => UUID_REGEX.test(value);
+const DB_MIGRATION_REQUIRED_MESSAGE =
+  'Database migration required: apply Clerk ID migration (UUID -> clerk_user_id) and retry.';
 
 const getErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message) {
@@ -59,20 +59,40 @@ const getErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
+const normalizeWorkspaceError = (message: string) => {
+  const normalized = message.toLowerCase();
+  const isUuidMismatch =
+    normalized.includes('invalid input syntax for type uuid') &&
+    normalized.includes('user_');
+
+  if (isUuidMismatch) {
+    return DB_MIGRATION_REQUIRED_MESSAGE;
+  }
+
+  return message;
+};
+
 export function CompanyProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const recoverCompany = useCallback(async (): Promise<Company | null> => {
-    const { data: ensuredByRpc, error: ensureError } = await supabase.rpc('ensure_company_for_current_user');
+  const fetchCurrentCompany = useCallback(async (): Promise<Company | null> => {
+    const { data, error: fetchError } = await supabase
+      .from('companies')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    if (ensureError) {
-      throw new Error(getErrorMessage(ensureError, 'Workspace recovery failed.'));
+    if (fetchError) {
+      throw new Error(
+        normalizeWorkspaceError(getErrorMessage(fetchError, 'Failed to fetch workspace.')),
+      );
     }
 
-    return (ensuredByRpc as Company | null) ?? null;
+    return (data as Company | null) ?? null;
   }, []);
 
   const syncCompany = useCallback(async (): Promise<Company | null> => {
@@ -85,20 +105,55 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
 
     try {
       setLoading(true);
-      const resolvedCompany = await recoverCompany();
+      const resolvedCompany = await fetchCurrentCompany();
       setCompany(resolvedCompany);
       setError(null);
       return resolvedCompany;
     } catch (err) {
-      setError(getErrorMessage(err, 'Failed to fetch company'));
+      setError(normalizeWorkspaceError(getErrorMessage(err, 'Failed to fetch company')));
       setCompany(null);
       return null;
     } finally {
       setLoading(false);
     }
-  }, [recoverCompany, user]);
+  }, [fetchCurrentCompany, user]);
 
-  const ensureCompany = useCallback(async () => syncCompany(), [syncCompany]);
+  const ensureCompany = useCallback(async (): Promise<Company | null> => {
+    if (!user) {
+      setCompany(null);
+      setError(null);
+      setLoading(false);
+      return null;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const { error: ensureError } = await supabase.rpc('ensure_company_for_current_user');
+
+      if (ensureError) {
+        throw new Error(
+          normalizeWorkspaceError(getErrorMessage(ensureError, 'Workspace recovery failed.')),
+        );
+      }
+
+      const resolvedCompany = await fetchCurrentCompany();
+
+      if (!resolvedCompany) {
+        throw new Error('Workspace was created but could not be loaded. Please retry.');
+      }
+
+      setCompany(resolvedCompany);
+      return resolvedCompany;
+    } catch (err) {
+      setError(normalizeWorkspaceError(getErrorMessage(err, 'Failed to create workspace')));
+      setCompany(null);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchCurrentCompany, user]);
 
   const fetchCompany = useCallback(async () => {
     await syncCompany();

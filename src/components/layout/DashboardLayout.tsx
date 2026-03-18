@@ -8,8 +8,7 @@ import { TrialProvider } from "@/hooks/useTrial";
 import { AppProvider, useApp } from "@/contexts/AppContext";
 import { OnboardingWizard } from "@/components/dashboard/OnboardingWizard";
 import { AccessGuard } from "@/components/guards/AccessGuard";
-import { TrialBanner } from "@/components/dashboard/TrialBanner";
-import { Loader2 } from "lucide-react";
+import { ChartCardSkeleton, StatCardSkeleton } from "@/components/ui/skeletons";
 import { AppShell } from "./AppShell";
 
 function DashboardContent() {
@@ -109,16 +108,35 @@ function DashboardContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-screen bg-background px-4 py-6 sm:px-6 lg:px-8">
+        <div className="app-shell-container space-y-6">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+          </div>
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <ChartCardSkeleton />
+            <ChartCardSkeleton />
+          </div>
+        </div>
       </div>
     );
   }
 
   if (isBootstrappingDemo) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-screen bg-background px-4 py-6 sm:px-6 lg:px-8">
+        <div className="app-shell-container space-y-6">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+          </div>
+          <ChartCardSkeleton />
+        </div>
       </div>
     );
   }
@@ -129,21 +147,34 @@ function DashboardContent() {
 
   if (!companyLoading && !company) {
     const isWorkspaceBusy = companyLoading || workspaceAction !== null;
+    const requiresDbMigration =
+      typeof companyError === "string" &&
+      companyError.toLowerCase().includes("database migration required");
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-4">
         <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 text-center space-y-4">
           <h2 className="text-lg font-semibold text-foreground">Workspace setup required</h2>
           <p className="text-sm text-muted-foreground">
-            We could not find your workspace. Create or recover your company to continue.
+            {requiresDbMigration
+              ? "Your workspace cannot be created until the database schema is migrated to Clerk IDs."
+              : "We could not find your workspace. Create or recover your company to continue."}
           </p>
           {companyError && (
             <p className="text-xs text-destructive">{companyError}</p>
+          )}
+          {requiresDbMigration && (
+            <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-left text-xs text-muted-foreground">
+              Apply pending Supabase migration and retry login:
+              <code className="mt-1 block rounded bg-background px-2 py-1 text-[11px] text-foreground">
+                20260305000001_migrate_uuid_to_clerk_id.sql
+              </code>
+            </div>
           )}
           <div className="flex flex-col gap-3">
             <button
               type="button"
               className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-              disabled={isWorkspaceBusy}
+              disabled={isWorkspaceBusy || requiresDbMigration}
               onClick={async () => {
                 setWorkspaceAction('create');
                 try {
@@ -158,7 +189,7 @@ function DashboardContent() {
             <button
               type="button"
               className="inline-flex h-10 items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground hover:bg-accent disabled:opacity-60"
-              disabled={isWorkspaceBusy}
+              disabled={isWorkspaceBusy || requiresDbMigration}
               onClick={async () => {
                 setWorkspaceAction('recover');
                 try {
@@ -196,7 +227,6 @@ function DashboardContent() {
 
   return (
     <div className="min-h-screen bg-background">
-      <TrialBanner />
       <AppShell
         sidebarOpen={sidebarOpen}
         onDismissSidebar={() => setSidebarOpen(false)}

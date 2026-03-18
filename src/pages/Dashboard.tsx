@@ -1,5 +1,6 @@
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, BarChart3, DollarSign, Target, TrendingUp, Users } from "lucide-react";
+import { AlertCircle, BarChart3, Check, Copy, DollarSign, Share2, Target, TrendingUp, Users } from "lucide-react";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { GrowthChart } from "@/components/dashboard/GrowthChart";
 import { UserGrowthChart } from "@/components/dashboard/UserGrowthChart";
@@ -7,10 +8,19 @@ import { MoneyValue } from "@/components/ui/money-value";
 import { FormattedPercent } from "@/components/ui/formatted-value";
 import { StatCard } from "@/components/ui/stat-card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { ChartCardSkeleton, StatCardSkeleton } from "@/components/ui/skeletons";
 import { InvestorPackActions } from "@/components/dashboard/InvestorPackActions";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useMetrics } from "@/hooks/useMetrics";
 import { useCompany } from "@/hooks/useCompany";
 import { useApp } from "@/contexts/AppContext";
@@ -21,9 +31,45 @@ export default function Dashboard() {
   const { company, loading: companyLoading } = useCompany();
   const { metrics, revenueSnapshots, userMetrics, valuationSnapshots, loading: metricsLoading, error } = useMetrics();
   const { isDemoMode } = useApp();
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const loading = companyLoading || metricsLoading;
   const currency = (company?.currency || "USD") as Currency;
+  const workspaceSlug = useMemo(() => {
+    const fallback = "workspace";
+    const base = (company?.name || fallback)
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
+    return base || fallback;
+  }, [company?.name]);
+
+  const shareUrl = useMemo(() => {
+    if (typeof window === "undefined") {
+      return `https://gestorniq.vercel.app/share/${workspaceSlug}`;
+    }
+
+    return `${window.location.origin}/share/${workspaceSlug}`;
+  }, [workspaceSlug]);
+
+  useEffect(() => {
+    if (!copied) return;
+
+    const timer = window.setTimeout(() => setCopied(false), 2000);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  const handleCopyShareUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -70,8 +116,8 @@ export default function Dashboard() {
         <EmptyState
           icon={BarChart3}
           title="No data yet"
-          description="Add your first revenue and user snapshots to unlock the dashboard."
-          actionLabel="Add revenue"
+          description="Add metrics or import CSV to see your chart."
+          actionLabel="+ Add Metrics"
           onAction={() => navigate("/dashboard/revenue?action=add")}
         />
       )}
@@ -84,17 +130,57 @@ export default function Dashboard() {
               Export a board-ready summary with your metrics, forecasts, and latest snapshots.
             </p>
           </div>
-          <InvestorPackActions
-            compact
-            companyName={company?.name || "My SaaS Company"}
-            currency={currency}
-            metrics={metrics}
-            revenueSnapshots={revenueSnapshots}
-            userMetrics={userMetrics}
-            valuationSnapshots={valuationSnapshots}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsShareOpen(true)}
+            >
+              <Share2 className="mr-2 h-4 w-4" />
+              Share Dashboard
+            </Button>
+            <InvestorPackActions
+              compact
+              companyName={company?.name || "My SaaS Company"}
+              currency={currency}
+              metrics={metrics}
+              revenueSnapshots={revenueSnapshots}
+              userMetrics={userMetrics}
+              valuationSnapshots={valuationSnapshots}
+            />
+          </div>
         </div>
       </div>
+
+      <Dialog open={isShareOpen} onOpenChange={setIsShareOpen}>
+        <DialogContent className="border-border/80 bg-card/95 backdrop-blur-md sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Share read-only view</DialogTitle>
+            <DialogDescription>
+              Generate a secure read-only link for investors.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input value={shareUrl} readOnly className="font-mono text-xs sm:text-sm" />
+            <Button type="button" onClick={handleCopyShareUrl}>
+              {copied ? (
+                <>
+                  <Check className="mr-2 h-4 w-4" />
+                  Copied! ✓
+                </>
+              ) : (
+                <>
+                  <Copy className="mr-2 h-4 w-4" />
+                  Copy link
+                </>
+              )}
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              This link shows a read-only snapshot. No login required.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
