@@ -6,14 +6,23 @@ import { useAuth } from '@/hooks/useAuth';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { Mail, Lock, User, ArrowRight, Loader2, ArrowLeft, ShieldCheck, TrendingUp, Clock3 } from 'lucide-react';
+import { Mail, Lock, User, ArrowRight, Loader2, ArrowLeft, ShieldCheck, TrendingUp, Clock3, Sparkles } from 'lucide-react';
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { AUTH_CONFIG } from '@/lib/auth-config';
 
 export default function Auth() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user, signIn, signUp, signInWithGoogle, resendConfirmationEmail, requestPasswordReset, loading: authLoading } = useAuth();
+  const {
+    user,
+    signIn,
+    signUp,
+    signInWithGoogle,
+    resendConfirmationEmail,
+    requestPasswordReset,
+    enterPreviewAccess,
+    loading: authLoading,
+  } = useAuth();
   const { t } = useLanguage();
   const [mode, setMode] = useState<'login' | 'signup' | 'reset'>('login');
   const [loading, setLoading] = useState(false);
@@ -218,6 +227,17 @@ export default function Auth() {
     }
   };
 
+  const handlePreviewAccess = async () => {
+    setLoading(true);
+    try {
+      await enterPreviewAccess();
+      toast.success('Preview access enabled.');
+      navigate('/dashboard?demo=1', { replace: true });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -304,6 +324,30 @@ export default function Auth() {
 
           {!isReset && (
             <>
+              {AUTH_CONFIG.uiBypassAuth && (
+                <>
+                  <Button
+                    type="button"
+                    variant="hero"
+                    className="w-full h-12 mb-3"
+                    onClick={handlePreviewAccess}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <>
+                        <Sparkles className="mr-2 h-4 w-4" />
+                        Enter Dashboard Instantly
+                      </>
+                    )}
+                  </Button>
+                  <p className="mb-6 text-center text-xs text-muted-foreground">
+                    One click opens the dashboard in preview mode with local demo data.
+                  </p>
+                </>
+              )}
+
               <Button
                 type="button"
                 variant="outline"

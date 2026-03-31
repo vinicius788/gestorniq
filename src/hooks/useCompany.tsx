@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback, createContext, useContext, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
+import {
+  UI_PREVIEW_COMPANY_STORAGE_KEY,
+  UI_PREVIEW_DEFAULTS,
+} from '@/lib/auth-config';
 
 export type DataSourceType = 'demo' | 'manual' | 'csv' | 'stripe';
 
@@ -72,8 +76,49 @@ const normalizeWorkspaceError = (message: string) => {
   return message;
 };
 
+const buildPreviewCompany = (overrides: Partial<Company> = {}): Company => {
+  const nowIso = new Date().toISOString();
+
+  return {
+    id: UI_PREVIEW_DEFAULTS.companyId,
+    user_id: UI_PREVIEW_DEFAULTS.userId,
+    clerk_user_id: UI_PREVIEW_DEFAULTS.userId,
+    name: UI_PREVIEW_DEFAULTS.companyName,
+    currency: 'USD',
+    created_at: nowIso,
+    updated_at: nowIso,
+    onboarding_completed: true,
+    onboarding_completed_at: nowIso,
+    data_source: 'demo',
+    ...overrides,
+  };
+};
+
+const readPreviewCompany = (): Company => {
+  if (typeof window === 'undefined') {
+    return buildPreviewCompany();
+  }
+
+  const rawCompany = localStorage.getItem(UI_PREVIEW_COMPANY_STORAGE_KEY);
+  if (!rawCompany) {
+    return buildPreviewCompany();
+  }
+
+  try {
+    const parsedCompany = JSON.parse(rawCompany) as Partial<Company>;
+    return buildPreviewCompany(parsedCompany);
+  } catch {
+    return buildPreviewCompany();
+  }
+};
+
+const persistPreviewCompany = (company: Company) => {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(UI_PREVIEW_COMPANY_STORAGE_KEY, JSON.stringify(company));
+};
+
 export function CompanyProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, isPreviewAccess } = useAuth();
   const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -96,6 +141,15 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const syncCompany = useCallback(async (): Promise<Company | null> => {
+    if (isPreviewAccess) {
+      const previewCompany = readPreviewCompany();
+      persistPreviewCompany(previewCompany);
+      setCompany(previewCompany);
+      setError(null);
+      setLoading(false);
+      return previewCompany;
+    }
+
     if (!user) {
       setCompany(null);
       setError(null);
@@ -116,9 +170,13 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [fetchCurrentCompany, user]);
+  }, [fetchCurrentCompany, isPreviewAccess, user]);
 
   const ensureCompany = useCallback(async (): Promise<Company | null> => {
+    if (isPreviewAccess) {
+      return syncCompany();
+    }
+
     if (!user) {
       setCompany(null);
       setError(null);
@@ -153,7 +211,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [fetchCurrentCompany, user]);
+  }, [fetchCurrentCompany, isPreviewAccess, syncCompany, user]);
 
   const fetchCompany = useCallback(async () => {
     await syncCompany();
@@ -165,6 +223,18 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
 
   const updateCompany = async (updates: Partial<Company>) => {
     if (!company) throw new Error('Company not found');
+
+    if (isPreviewAccess) {
+      const nextCompany = buildPreviewCompany({
+        ...company,
+        ...updates,
+        updated_at: new Date().toISOString(),
+      });
+      persistPreviewCompany(nextCompany);
+      setCompany(nextCompany);
+      setError(null);
+      return;
+    }
 
     const { error: updateError } = await supabase
       .from('companies')

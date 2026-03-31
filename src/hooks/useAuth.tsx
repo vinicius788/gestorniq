@@ -5,12 +5,18 @@ import {
   setSupabaseAccessTokenProvider,
   clearSupabaseAccessTokenProvider,
 } from '@/integrations/supabase/client';
-import { AUTH_CONFIG } from '@/lib/auth-config';
+import {
+  AUTH_CONFIG,
+  UI_PREVIEW_AUTH_STORAGE_KEY,
+  UI_PREVIEW_COMPANY_STORAGE_KEY,
+  UI_PREVIEW_DEFAULTS,
+} from '@/lib/auth-config';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  isPreviewAccess: boolean;
   authProvider: 'clerk_supabase_bridge';
   signUp: (
     email: string,
@@ -21,6 +27,7 @@ interface AuthContextType {
   signInWithGoogle: (redirectPath?: string) => Promise<{ error: Error | null }>;
   resendConfirmationEmail: (email: string, redirectPath?: string) => Promise<{ error: Error | null }>;
   requestPasswordReset: (email: string, redirectPath?: string) => Promise<{ error: Error | null }>;
+  enterPreviewAccess: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -48,6 +55,30 @@ const getAuthUrl = (path: string) => {
 };
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
+
+const buildPreviewUser = (): User => {
+  const nowIso = new Date().toISOString();
+
+  return {
+    id: UI_PREVIEW_DEFAULTS.userId,
+    aud: 'authenticated',
+    role: 'authenticated',
+    email: UI_PREVIEW_DEFAULTS.email,
+    phone: undefined,
+    created_at: nowIso,
+    updated_at: nowIso,
+    app_metadata: {
+      provider: 'preview',
+      providers: ['preview'],
+    },
+    user_metadata: {
+      full_name: UI_PREVIEW_DEFAULTS.fullName,
+      avatar_url: undefined,
+      clerk_id: UI_PREVIEW_DEFAULTS.userId,
+    },
+    identities: [],
+  } as User;
+};
 
 const getErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message) {
@@ -112,6 +143,59 @@ const toSupabaseLikeUserFromClerk = (clerkUser: ClerkUserLike): User => {
     identities: [],
   } as User;
 };
+
+function UiPreviewAuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(() => buildPreviewUser());
+
+  useEffect(() => {
+    localStorage.setItem(UI_PREVIEW_AUTH_STORAGE_KEY, 'true');
+    localStorage.setItem('gestorniq-demo-mode', 'true');
+    localStorage.setItem('gestorniq-onboarding-complete', 'true');
+  }, []);
+
+  const enterPreviewAccess = async () => {
+    localStorage.setItem(UI_PREVIEW_AUTH_STORAGE_KEY, 'true');
+    localStorage.setItem('gestorniq-demo-mode', 'true');
+    localStorage.setItem('gestorniq-onboarding-complete', 'true');
+    setUser(buildPreviewUser());
+  };
+
+  const disabledAuthAction = async () => ({
+    error: new Error('Authentication flows are disabled while preview access is enabled.'),
+  });
+
+  const signOut = async () => {
+    localStorage.removeItem(UI_PREVIEW_AUTH_STORAGE_KEY);
+    localStorage.removeItem(UI_PREVIEW_COMPANY_STORAGE_KEY);
+    localStorage.removeItem('gestorniq-demo-mode');
+    localStorage.removeItem('gestorniq-onboarding-complete');
+    setUser(null);
+  };
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        session: null,
+        loading: false,
+        isPreviewAccess: Boolean(user),
+        authProvider: 'clerk_supabase_bridge',
+        signUp: async () => ({
+          error: new Error('Authentication flows are disabled while preview access is enabled.'),
+          needsEmailConfirmation: false,
+        }),
+        signIn: disabledAuthAction,
+        signInWithGoogle: disabledAuthAction,
+        resendConfirmationEmail: disabledAuthAction,
+        requestPasswordReset: disabledAuthAction,
+        enterPreviewAccess,
+        signOut,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
 
 function ClerkAuthProviderImpl({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -323,12 +407,14 @@ function ClerkAuthProviderImpl({ children }: { children: ReactNode }) {
       user,
       session,
       loading,
+      isPreviewAccess: false,
       authProvider: 'clerk_supabase_bridge',
       signUp,
       signIn,
       signInWithGoogle,
       resendConfirmationEmail,
       requestPasswordReset,
+      enterPreviewAccess: async () => {},
       signOut,
     }}>
       {children}
@@ -337,6 +423,10 @@ function ClerkAuthProviderImpl({ children }: { children: ReactNode }) {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  if (AUTH_CONFIG.uiBypassAuth) {
+    return <UiPreviewAuthProvider>{children}</UiPreviewAuthProvider>;
+  }
+
   if (AUTH_CONFIG.isAuthMisconfigured) {
     console.error(
       'Clerk is required but not configured. Set VITE_CLERK_PUBLISHABLE_KEY in frontend env vars.',

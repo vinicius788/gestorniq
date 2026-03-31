@@ -1,10 +1,22 @@
 const clerkPublishableKey =
   import.meta.env.VITE_CLERK_PUBLISHABLE_KEY ||
   import.meta.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+const uiBypassAuth = import.meta.env.VITE_UI_BYPASS_AUTH === 'true';
 
 const rawAppUrl =
   import.meta.env.VITE_APP_URL ||
   import.meta.env.VITE_AUTH_REDIRECT_ORIGIN;
+
+export const UI_PREVIEW_AUTH_STORAGE_KEY = 'gestorniq-ui-auth-bypass';
+export const UI_PREVIEW_COMPANY_STORAGE_KEY = 'gestorniq-ui-preview-company';
+
+export const UI_PREVIEW_DEFAULTS = {
+  companyId: '10000000-0000-4000-8000-000000000001',
+  companyName: 'Preview Workspace',
+  email: 'preview@gestorniq.local',
+  fullName: 'Preview User',
+  userId: '00000000-0000-4000-8000-000000000001',
+} as const;
 
 const normalizeAppUrl = (value: string | undefined): string | null => {
   if (!value) return null;
@@ -22,7 +34,7 @@ const normalizeAppUrl = (value: string | undefined): string | null => {
 
 // Clerk-only auth is always enforced in this app runtime.
 export const CLERK_ONLY_MODE = true;
-const requireClerk = true;
+const requireClerk = !uiBypassAuth;
 const isClerkEnabled = Boolean(clerkPublishableKey);
 const appUrl = normalizeAppUrl(rawAppUrl);
 
@@ -33,6 +45,7 @@ export const AUTH_CONFIG = {
   isAuthMisconfigured: requireClerk && !isClerkEnabled,
   appUrl,
   clerkOnlyMode: CLERK_ONLY_MODE,
+  uiBypassAuth,
   clerkSupabaseJwtTemplate: import.meta.env.VITE_CLERK_SUPABASE_JWT_TEMPLATE || 'supabase',
   clerkFrontendApiUrl:
     import.meta.env.VITE_CLERK_FRONTEND_API_URL ||
@@ -48,6 +61,12 @@ export function getAuthConfigWarnings(): string[] {
   if (AUTH_CONFIG.isAuthMisconfigured) {
     warnings.push(
       'Clerk is required in this environment but VITE_CLERK_PUBLISHABLE_KEY is missing. Configure frontend env vars and redeploy.',
+    );
+  }
+
+  if (AUTH_CONFIG.uiBypassAuth) {
+    warnings.push(
+      'VITE_UI_BYPASS_AUTH=true enables preview access without authentication. Disable it outside local UI work.',
     );
   }
 

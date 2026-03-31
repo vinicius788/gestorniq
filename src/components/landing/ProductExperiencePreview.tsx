@@ -11,6 +11,11 @@ import { Badge } from "@/components/ui/badge";
 import { DeltaBadge } from "@/components/ui/delta-badge";
 import { MoneyValue } from "@/components/ui/money-value";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import {
+  UI_PREVIEW_AUTH_STORAGE_KEY,
+  UI_PREVIEW_COMPANY_STORAGE_KEY,
+  UI_PREVIEW_DEFAULTS,
+} from "@/lib/auth-config";
 import { cn } from "@/lib/utils";
 
 type PreviewView = "overview" | "revenue" | "users" | "valuation";
@@ -180,16 +185,40 @@ export function ProductExperiencePreview() {
   const data = PREVIEW_DATA[timeframe];
   const activeView = VIEW_ITEMS.find((item) => item.value === view) ?? VIEW_ITEMS[0];
 
+  const openPreviewDashboard = () => {
+    const nowIso = new Date().toISOString();
+
+    localStorage.setItem(UI_PREVIEW_AUTH_STORAGE_KEY, 'true');
+    localStorage.setItem('gestorniq-demo-mode', 'true');
+    localStorage.setItem('gestorniq-onboarding-complete', 'true');
+    localStorage.setItem(
+      UI_PREVIEW_COMPANY_STORAGE_KEY,
+      JSON.stringify({
+        id: UI_PREVIEW_DEFAULTS.companyId,
+        user_id: UI_PREVIEW_DEFAULTS.userId,
+        clerk_user_id: UI_PREVIEW_DEFAULTS.userId,
+        name: UI_PREVIEW_DEFAULTS.companyName,
+        currency: 'USD',
+        created_at: nowIso,
+        updated_at: nowIso,
+        onboarding_completed: true,
+        onboarding_completed_at: nowIso,
+        data_source: 'demo',
+      }),
+    );
+    navigate('/dashboard?demo=1', { replace: true });
+  };
+
   const handleViewChange = (nextView: PreviewView) => {
     if (LOCKED_VIEWS.includes(nextView)) {
-      navigate("/auth");
+      openPreviewDashboard();
       return;
     }
     setView(nextView);
   };
 
   const handleLockedClick = () => {
-    navigate("/auth");
+    openPreviewDashboard();
   };
 
   return (
