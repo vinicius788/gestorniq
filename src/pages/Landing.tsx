@@ -17,17 +17,47 @@ import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { ProductExperiencePreview } from "@/components/landing/ProductExperiencePreview";
+import {
+  UI_PREVIEW_AUTH_STORAGE_KEY,
+  UI_PREVIEW_COMPANY_STORAGE_KEY,
+  UI_PREVIEW_DEFAULTS,
+} from "@/lib/auth-config";
 
 export default function Landing() {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const currentYear = new Date().getFullYear();
 
-  const handleViewDemo = () => {
-    // Persist intent so authenticated and non-authenticated flows behave consistently.
+  const enablePreviewAccess = () => {
+    const nowIso = new Date().toISOString();
+
+    localStorage.setItem(UI_PREVIEW_AUTH_STORAGE_KEY, 'true');
     localStorage.setItem('gestorniq-demo-mode', 'true');
     localStorage.setItem('gestorniq-onboarding-complete', 'true');
-    navigate('/auth?demo=1');
+    localStorage.setItem(
+      UI_PREVIEW_COMPANY_STORAGE_KEY,
+      JSON.stringify({
+        id: UI_PREVIEW_DEFAULTS.companyId,
+        user_id: UI_PREVIEW_DEFAULTS.userId,
+        clerk_user_id: UI_PREVIEW_DEFAULTS.userId,
+        name: UI_PREVIEW_DEFAULTS.companyName,
+        currency: 'USD',
+        created_at: nowIso,
+        updated_at: nowIso,
+        onboarding_completed: true,
+        onboarding_completed_at: nowIso,
+        data_source: 'demo',
+      }),
+    );
+  };
+
+  const openDashboardInstantly = () => {
+    enablePreviewAccess();
+    navigate('/dashboard?demo=1', { replace: true });
+  };
+
+  const handleViewDemo = () => {
+    openDashboardInstantly();
   };
 
   const features = [
@@ -98,11 +128,11 @@ export default function Landing() {
             <a href="#security" className="text-sm text-muted-foreground hover:text-foreground transition-colors">{t.nav.security}</a>
           </div>
           <div className="flex items-center gap-3">
-            <Button variant="ghost" asChild>
-              <Link to="/auth">{t.nav.login}</Link>
+            <Button variant="ghost" onClick={openDashboardInstantly}>
+              Open dashboard
             </Button>
-            <Button variant="hero" asChild>
-              <Link to="/auth">{t.landing.cta.primary}</Link>
+            <Button variant="hero" onClick={openDashboardInstantly}>
+              {t.landing.cta.primary}
             </Button>
           </div>
         </div>
@@ -135,11 +165,11 @@ export default function Landing() {
             </p>
             
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Button variant="hero" size="xl" asChild>
-                <Link to="/auth">
+              <Button variant="hero" size="xl" onClick={openDashboardInstantly}>
+                <>
                   {t.landing.cta.primary}
                   <ArrowRight className="ml-2 h-5 w-5" />
-                </Link>
+                </>
               </Button>
               <Button variant="hero-outline" size="xl" onClick={handleViewDemo}>
                 {t.landing.cta.secondary}
@@ -297,8 +327,8 @@ export default function Landing() {
                   </li>
                 ))}
               </ul>
-              <Button variant="hero" className="w-full" asChild>
-                <Link to="/auth">{t.pricing.standard.cta}</Link>
+              <Button variant="hero" className="w-full" onClick={openDashboardInstantly}>
+                {t.pricing.standard.cta}
               </Button>
             </div>
           </div>
@@ -368,11 +398,11 @@ export default function Landing() {
               <p className="text-muted-foreground mb-8">
                 {t.landing.cta2.subtitle}
               </p>
-              <Button variant="hero" size="xl" asChild>
-                <Link to="/auth">
+              <Button variant="hero" size="xl" onClick={openDashboardInstantly}>
+                <>
                   {t.landing.cta2.button}
                   <ArrowRight className="ml-2 h-5 w-5" />
-                </Link>
+                </>
               </Button>
             </div>
           </div>

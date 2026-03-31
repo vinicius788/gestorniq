@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, createContext, useContext, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCompany } from './useCompany';
+import { useAuth } from './useAuth';
+import { UI_PREVIEW_DEFAULTS } from '@/lib/auth-config';
 
 interface Trial {
   id: string;
@@ -13,9 +15,12 @@ interface Trial {
 
 interface Subscription {
   id: string;
-  user_id: string;
+  user_id: string | null;
+  clerk_user_id: string;
   plan: string;
   status: string;
+  amount_cents: number | null;
+  currency: string | null;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
   current_period_start: string | null;
@@ -38,12 +43,33 @@ const TrialContext = createContext<TrialContextType | undefined>(undefined);
 
 export function TrialProvider({ children }: { children: ReactNode }) {
   const { company, loading: companyLoading } = useCompany();
+  const { user, isPreviewAccess } = useAuth();
   const [trial, setTrial] = useState<Trial | null>(null);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchTrialAndSubscription = useCallback(async () => {
+    if (isPreviewAccess) {
+      setTrial(null);
+      setSubscription({
+        id: 'preview-subscription',
+        user_id: UI_PREVIEW_DEFAULTS.userId,
+        clerk_user_id: UI_PREVIEW_DEFAULTS.userId,
+        plan: 'standard',
+        status: 'active',
+        amount_cents: 3900,
+        currency: 'usd',
+        stripe_customer_id: null,
+        stripe_subscription_id: null,
+        current_period_start: null,
+        current_period_end: null,
+      });
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
     if (!company) {
       setTrial(null);
       setSubscription(null);
@@ -80,12 +106,11 @@ export function TrialProvider({ children }: { children: ReactNode }) {
       }
 
       // Fetch subscription for the current user
-      const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data: subData, error: subError } = await supabase
           .from('subscriptions')
           .select('*')
-          .eq('user_id', user.id)
+          .eq('clerk_user_id', user.id)
           .order('updated_at', { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -101,7 +126,7 @@ export function TrialProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [company]);
+  }, [company, isPreviewAccess, user]);
 
   useEffect(() => {
     if (!companyLoading) {
