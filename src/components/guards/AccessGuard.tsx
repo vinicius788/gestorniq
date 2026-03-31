@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { Loader2 } from '@/lib/icons';
 import { useCompany } from '@/hooks/useCompany';
 import { useTrial } from '@/hooks/useTrial';
 

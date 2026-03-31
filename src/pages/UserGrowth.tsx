@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Activity, AlertCircle, Plus, Upload, Users, UserPlus, TrendingUp, X } from "lucide-react";
+import { Activity, AlertCircle, Plus, TrendingUp, Upload, UserPlus, Users, X } from "@/lib/icons";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import { UserGrowthChart } from "@/components/dashboard/UserGrowthChart";
 import { UserGrowthMetrics } from "@/components/dashboard/UserGrowthMetrics";
 import { FormattedNumber, FormattedPercent } from "@/components/ui/formatted-value";
 import { useMetrics } from "@/hooks/useMetrics";
-import { useApp } from "@/contexts/AppContext";
+import { useApp } from "@/app/providers/AppProvider";
 import { formatDate, getGrowthLabel } from "@/lib/format";
 import { parseCsv } from "@/lib/csv";
 import { calculateUserCadenceMetrics } from "@/lib/calculations";

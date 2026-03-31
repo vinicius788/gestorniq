@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { User, Key, Bell, CreditCard, Shield, Check, Globe, Clock, Loader2, RefreshCw, Unplug } from "lucide-react";
+import { Bell, Check, Clock, CreditCard, Globe, Key, Loader2, RefreshCw, Shield, Unplug, User } from "@/lib/icons";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/app/providers/LanguageProvider";
 import { useCompany } from "@/hooks/useCompany";
 import { useTrial } from "@/hooks/useTrial";
-import { useApp } from "@/contexts/AppContext";
+import { useApp } from "@/app/providers/AppProvider";
 import { DemoModeToggle } from "@/components/dashboard/DemoModeToggle";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { Language } from "@/lib/i18n";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/app/providers/AuthProvider";
 
 interface StripeConnectionState {
   loading: boolean;

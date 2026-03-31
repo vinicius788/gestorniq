@@ -1,6 +1,6 @@
-import { Sparkles } from 'lucide-react';
+import { Sparkles } from '@/lib/icons';
 import { Switch } from '@/components/ui/switch';
-import { useApp } from '@/contexts/AppContext';
+import { useApp } from '@/app/providers/AppProvider';
 
 export function DemoModeToggle() {
   const { isDemoMode, setDemoMode } = useApp();

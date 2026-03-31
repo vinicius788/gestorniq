@@ -2,11 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useAuth } from '@/hooks/useAuth';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/app/providers/AuthProvider';
+import { useLanguage } from '@/app/providers/LanguageProvider';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { Mail, Lock, User, ArrowRight, Loader2, ArrowLeft, ShieldCheck, TrendingUp, Clock3, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Clock3, Loader2, Lock, Mail, ShieldCheck, Sparkles, TrendingUp, User } from '@/lib/icons';
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { AUTH_CONFIG } from '@/lib/auth-config';
 

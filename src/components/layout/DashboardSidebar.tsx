@@ -8,10 +8,10 @@ import {
   LogOut,
   Users,
   X
-} from "lucide-react";
+} from "@/lib/icons";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/hooks/useAuth";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/app/providers/AuthProvider";
+import { useLanguage } from "@/app/providers/LanguageProvider";
 import { SidebarItem } from "@/components/layout/SidebarItem";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 

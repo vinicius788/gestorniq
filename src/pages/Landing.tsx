@@ -12,9 +12,9 @@ import {
   Layers,
   Target,
   Sparkles
-} from "lucide-react";
+} from "@/lib/icons";
 import { Button } from "@/components/ui/button";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/app/providers/LanguageProvider";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { ProductExperiencePreview } from "@/components/landing/ProductExperiencePreview";
 import {

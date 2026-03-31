@@ -2,14 +2,14 @@ import { useEffect, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { DashboardSidebar } from "./DashboardSidebar";
 import { DashboardHeader } from "./DashboardHeader";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/app/providers/AuthProvider";
 import { CompanyProvider, useCompany } from "@/hooks/useCompany";
 import { TrialProvider } from "@/hooks/useTrial";
-import { AppProvider, useApp } from "@/contexts/AppContext";
+import { AppProvider, useApp } from "@/app/providers/AppProvider";
 import { OnboardingWizard } from "@/components/dashboard/OnboardingWizard";
 import { AccessGuard } from "@/components/guards/AccessGuard";
 import { TrialBanner } from "@/components/dashboard/TrialBanner";
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "@/lib/icons";
 import { AppShell } from "./AppShell";
 
 function DashboardContent() {

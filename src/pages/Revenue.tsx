@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { DollarSign, TrendingUp, Plus, Upload, Loader2, X } from "lucide-react";
+import { DollarSign, Loader2, Plus, TrendingUp, Upload, X } from "@/lib/icons";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { MoneyValue } from "@/components/ui/money-value";
 import { useMetrics } from "@/hooks/useMetrics";
 import { useCompany } from "@/hooks/useCompany";
-import { useApp } from "@/contexts/AppContext";
+import { useApp } from "@/app/providers/AppProvider";
 import { toast } from "sonner";
 import { formatDate, type Currency } from "@/lib/format";
 import { timeframeLabels } from "@/lib/formatters";

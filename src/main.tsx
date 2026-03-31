@@ -1,7 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { ClerkProvider } from "@clerk/clerk-react";
 import App from "./App.tsx";
-import "./index.css";
+import "@/styles/index.css";
 import { AUTH_CONFIG } from "@/lib/auth-config";
 import { initObservability } from "@/lib/observability";
 

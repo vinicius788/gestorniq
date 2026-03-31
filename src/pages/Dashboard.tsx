@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, BarChart3, DollarSign, Target, TrendingUp, Users } from "lucide-react";
+import { AlertCircle, BarChart3, DollarSign, Target, TrendingUp, Users } from "@/lib/icons";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { GrowthChart } from "@/components/dashboard/GrowthChart";
 import { UserGrowthChart } from "@/components/dashboard/UserGrowthChart";
@@ -13,7 +13,7 @@ import { ChartCardSkeleton, StatCardSkeleton } from "@/components/ui/skeletons";
 import { InvestorPackActions } from "@/components/dashboard/InvestorPackActions";
 import { useMetrics } from "@/hooks/useMetrics";
 import { useCompany } from "@/hooks/useCompany";
-import { useApp } from "@/contexts/AppContext";
+import { useApp } from "@/app/providers/AppProvider";
 import type { Currency } from "@/lib/format";
 
 export default function Dashboard() {

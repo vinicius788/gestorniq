@@ -1,4 +1,5 @@
-import { LucideIcon, Info } from "lucide-react";
+import { Info } from "@/lib/icons";
+import type { LucideIcon } from "@/lib/icons";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { DeltaBadge } from "@/components/ui/delta-badge";
 import { cn } from "@/lib/utils";

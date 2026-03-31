@@ -5,7 +5,7 @@ import {
   Lock,
   Target,
   Users,
-} from "lucide-react";
+} from "@/lib/icons";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { DeltaBadge } from "@/components/ui/delta-badge";

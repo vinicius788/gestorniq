@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCompany } from './useCompany';
-import { useApp } from '@/contexts/AppContext';
+import { useApp } from '@/app/providers/AppProvider';
 import { 
   calculateMetrics, 
   filterByTimeframe,

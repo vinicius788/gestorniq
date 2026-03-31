@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Clock, Zap } from 'lucide-react';
+import { Clock, Zap } from '@/lib/icons';
 import { Button } from '@/components/ui/button';
 import { useTrial } from '@/hooks/useTrial';
 

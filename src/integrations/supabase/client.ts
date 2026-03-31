@@ -9,6 +9,10 @@ const SUPABASE_PUBLISHABLE_KEY =
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
   import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
+type AccessTokenProvider = () => Promise<string | null>;
+
+let supabaseAccessTokenProvider: AccessTokenProvider | null = null;
+
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
@@ -18,10 +22,43 @@ if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
   );
 }
 
+const withClerkAccessToken: typeof fetch = async (input, init) => {
+  const url = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
+  const token = supabaseAccessTokenProvider ? await supabaseAccessTokenProvider() : null;
+  const headers = new Headers(init?.headers);
+
+  if (token && !url.includes('/auth/v1/')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  return fetch(input, {
+    ...init,
+    headers,
+  });
+};
+
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
-  }
+  },
+  global: {
+    fetch: withClerkAccessToken,
+  },
 });
+
+async function syncRealtimeAccessToken() {
+  const token = supabaseAccessTokenProvider ? await supabaseAccessTokenProvider() : null;
+  supabase.realtime.setAuth(token ?? null);
+}
+
+export function setSupabaseAccessTokenProvider(provider: AccessTokenProvider) {
+  supabaseAccessTokenProvider = provider;
+  void syncRealtimeAccessToken();
+}
+
+export function clearSupabaseAccessTokenProvider() {
+  supabaseAccessTokenProvider = null;
+  void syncRealtimeAccessToken();
+}

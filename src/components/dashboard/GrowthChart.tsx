@@ -1,5 +1,5 @@
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { ActivitySquare, TrendingUp } from "lucide-react";
+import { ActivitySquare, TrendingUp } from "@/lib/icons";
 import { useMetrics } from "@/hooks/useMetrics";
 import { ChartCard } from "@/components/ui/chart-card";
 

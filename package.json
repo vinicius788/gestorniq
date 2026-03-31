@@ -1,14 +1,18 @@
 {
-  "name": "vite_react_shadcn_ts",
+  "name": "gestorniq",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
+    "preview:prod": "vite preview --host 0.0.0.0 --port 4173",
     "test": "vitest run",
     "test:watch": "vitest",
     "security:scan-secrets": "bash scripts/scan-secrets.sh",
@@ -22,9 +26,11 @@
     "supabase:backfill:stripe-secrets": "bash scripts/backfill-stripe-secrets.sh --dry-run",
     "release:preflight": "bash scripts/release-preflight.sh",
     "smoke:staging": "bash scripts/smoke-staging.sh",
+    "smoke:prod:local": "bash scripts/prod-preview-smoke.sh",
     "release:staging": "bash scripts/release-staging-flow.sh",
     "audit:high": "npm audit --omit=dev --audit-level=high",
-    "ci:check": "npm run lint && npm run test && npm run build && npm run security:scan-secrets:strict"
+    "ci:check": "npm run lint && npm run test && npm run build && npm run security:scan-secrets:strict",
+    "release:ready": "npm run ci:check && npm run smoke:prod:local"
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.61.0",

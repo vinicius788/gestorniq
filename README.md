@@ -10,20 +10,41 @@ Web SaaS for founders to track SaaS metrics (MRR/ARR, user growth, valuation, fo
 
 ## Local development
 ```bash
+nvm use
 npm install
 npm run dev
 ```
 
+## Project structure
+- `src/app`: app bootstrap, providers, and route wiring.
+- `src/components`: reusable UI, dashboard widgets, and layout primitives.
+- `src/pages`: route-level screens.
+- `src/hooks`: domain hooks that consume app providers and integrations.
+- `src/lib`: shared business logic, formatting, i18n, and utilities.
+- `docs/operations`: release, rollback, smoke, and incident runbooks.
+- `docs/security`: security-specific operational procedures.
+- `scripts`: release automation, healthchecks, and local production smoke checks.
+
 ## Validation
 ```bash
+nvm use
 npm run lint
 npm run test
 npm run build
+npm run smoke:prod:local
 npm run security:scan-secrets
 npm run ops:healthcheck
 npm run ops:db-restore-drill -- --env staging
 npm run ci:check
+npm run release:ready
 npm run audit:high
+```
+
+Production-like local validation:
+```bash
+nvm use
+npm run preview:prod
+npm run smoke:prod:local
 ```
 
 For stricter checks in CI/release pipelines:
@@ -112,9 +133,10 @@ Recommended `CORS_ALLOWED_ORIGINS`:
 Do not enable `CORS_ALLOW_ALL_LOCAL` in production.
 
 ## Security operations
-- Secret rotation procedure: `SECURITY_ROTATION_RUNBOOK.md`
-- Go-live operational checklist: `GO_LIVE_CHECKLIST.md`
-- Release evidence template: `RELEASE_EVIDENCE.md`
+- Secret rotation procedure: `docs/security/SECURITY_ROTATION_RUNBOOK.md`
+- Go-live operational checklist: `docs/operations/GO_LIVE_CHECKLIST.md`
+- Release evidence template: `docs/operations/RELEASE_EVIDENCE.md`
+- Launch smoke checklist: `docs/operations/SMOKE_TESTS.md`
 - Supabase Auth attack-protection/rate-limit settings must be configured in Dashboard: `Authentication -> Attack protection` (tracking: https://github.com/vinicius788/gestorniq/issues/5).
 
 ## Stripe revenue sync
@@ -134,4 +156,3 @@ bash scripts/backfill-stripe-secrets.sh --dry-run
 # apply
 bash scripts/backfill-stripe-secrets.sh --apply
 ```
-# gestorniq

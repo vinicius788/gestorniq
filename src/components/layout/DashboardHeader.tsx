@@ -1,13 +1,13 @@
-import { Bell, Menu, LogOut, Settings, User, Upload, Plus } from "lucide-react";
+import { Bell, LogOut, Menu, Plus, Settings, Upload, User } from "@/lib/icons";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TimeframeSelector } from "@/components/dashboard/TimeframeSelector";
 import { DemoModeToggle } from "@/components/dashboard/DemoModeToggle";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/app/providers/AuthProvider";
 import { useCompany } from "@/hooks/useCompany";
-import { useApp } from "@/contexts/AppContext";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useApp } from "@/app/providers/AppProvider";
+import { useLanguage } from "@/app/providers/LanguageProvider";
 import {
   DropdownMenu,
   DropdownMenuContent,

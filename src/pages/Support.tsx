@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowLeft, Mail, MessageCircle, FileText } from "lucide-react";
+import { ArrowLeft, FileText, Mail, MessageCircle } from "@/lib/icons";
 import { Button } from "@/components/ui/button";
 
 export default function Support() {

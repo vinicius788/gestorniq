@@ -1,4 +1,4 @@
-import { useApp } from '@/contexts/AppContext';
+import { useApp } from '@/app/providers/AppProvider';
 import type { Timeframe } from '@/lib/calculations';
 import { timeframeLabels } from '@/lib/formatters';
 import { SegmentedControl } from '@/components/ui/segmented-control';

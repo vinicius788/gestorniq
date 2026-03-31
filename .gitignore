@@ -21,6 +21,7 @@ supabase/.temp/
 !.vscode/extensions.json
 .idea
 .DS_Store
+.vercel
 *.suo
 *.ntvs*
 *.njsproj

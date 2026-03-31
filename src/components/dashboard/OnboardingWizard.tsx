@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Building2, Coins, Database, FileSpreadsheet, CheckCircle2, ArrowRight, ArrowLeft, CreditCard, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Building2, CheckCircle2, Coins, CreditCard, Database, FileSpreadsheet, Sparkles } from '@/lib/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { useApp } from '@/contexts/AppContext';
+import { useApp } from '@/app/providers/AppProvider';
 import { useCompany } from '@/hooks/useCompany';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/app/providers/LanguageProvider';
 import { toast } from 'sonner';
 import type { Currency } from '@/lib/currency';
 

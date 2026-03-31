@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, createContext, useContext, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCompany } from './useCompany';
-import { useAuth } from './useAuth';
+import { useAuth } from '@/app/providers/AuthProvider';
 import { UI_PREVIEW_DEFAULTS } from '@/lib/auth-config';
 
 interface Trial {

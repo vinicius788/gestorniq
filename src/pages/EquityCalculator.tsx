@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Calculator, PieChart, DollarSign, Loader2 } from "lucide-react";
+import { Calculator, DollarSign, Loader2, PieChart } from "@/lib/icons";
 import { MoneyValue } from "@/components/ui/money-value";
 import { useMetrics } from "@/hooks/useMetrics";
 import { useCompany } from "@/hooks/useCompany";
-import { useApp } from "@/contexts/AppContext";
+import { useApp } from "@/app/providers/AppProvider";
 import { calculateEquityValue } from "@/lib/calculations";
 import type { Currency } from "@/lib/format";
 

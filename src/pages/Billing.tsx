@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Clock, AlertTriangle, CreditCard, Check, Loader2, ExternalLink, Settings2 } from 'lucide-react';
+import { AlertTriangle, Check, Clock, CreditCard, ExternalLink, Loader2, Settings2 } from '@/lib/icons';
 import { Button } from '@/components/ui/button';
 import { useTrial } from '@/hooks/useTrial';
 import { useCompany } from '@/hooks/useCompany';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/app/providers/LanguageProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 

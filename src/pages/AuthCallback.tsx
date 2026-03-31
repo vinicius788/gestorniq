@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useClerk } from '@clerk/clerk-react';
-import { Loader2 } from 'lucide-react';
+import { Loader2 } from '@/lib/icons';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { AUTH_CONFIG } from '@/lib/auth-config';
 

@@ -1,4 +1,4 @@
-import { LucideIcon } from "lucide-react";
+import type { LucideIcon } from "@/lib/icons";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ChartCardSkeleton } from "@/components/ui/skeletons";
 import { cn } from "@/lib/utils";

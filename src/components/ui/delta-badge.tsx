@@ -1,4 +1,4 @@
-import { TrendingDown, TrendingUp } from "lucide-react";
+import { TrendingDown, TrendingUp } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 import { formatPercent } from "@/lib/format";
 

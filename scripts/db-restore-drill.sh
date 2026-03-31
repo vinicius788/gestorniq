@@ -138,7 +138,7 @@ cat <<'EOF'
 5) Simulate rollback by restoring to the pre-migration point (PITR/snapshot).
 6) Validate integrity checks and capture outputs in the evidence file.
 7) Compute and record RTO/RPO.
-8) Attach evidence to RELEASE_EVIDENCE.md before GO decision.
+8) Attach evidence to docs/operations/RELEASE_EVIDENCE.md before GO decision.
 
 IMPORTANT:
 - Migration 20260220100000_phase_a_launch_blockers.sql includes consolidation/deletes.

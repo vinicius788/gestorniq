@@ -1,4 +1,4 @@
-import { Users, UserPlus, TrendingUp, Activity } from "lucide-react";
+import { Activity, TrendingUp, UserPlus, Users } from "@/lib/icons";
 import { useMetrics } from "@/hooks/useMetrics";
 import { FormattedNumber, FormattedPercent } from "@/components/ui/formatted-value";
 import { calculateUserCadenceMetrics } from "@/lib/calculations";

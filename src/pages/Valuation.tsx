@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, Calculator, DollarSign, Info, Loader2, Save, TrendingUp, Users } from "lucide-react";
+import { AlertCircle, Calculator, DollarSign, Info, Loader2, Save, TrendingUp, Users } from "@/lib/icons";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -13,7 +13,7 @@ import { FormattedPercent } from "@/components/ui/formatted-value";
 import { InvestorPackActions } from "@/components/dashboard/InvestorPackActions";
 import { useMetrics } from "@/hooks/useMetrics";
 import { useCompany } from "@/hooks/useCompany";
-import { useApp } from "@/contexts/AppContext";
+import { useApp } from "@/app/providers/AppProvider";
 import { calculateSuggestedMultipleBreakdown } from "@/lib/calculations";
 import { formatPercent, getGrowthLabel, type Currency } from "@/lib/format";
 

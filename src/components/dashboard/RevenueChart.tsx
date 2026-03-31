@@ -1,5 +1,5 @@
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { LineChart, Wallet } from "lucide-react";
+import { LineChart, Wallet } from "@/lib/icons";
 import { useMetrics } from "@/hooks/useMetrics";
 import { useCompany } from "@/hooks/useCompany";
 import { ChartCard } from "@/components/ui/chart-card";
