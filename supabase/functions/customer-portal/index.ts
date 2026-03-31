@@ -61,7 +61,7 @@ serve(async (req) => {
     const { data: subscription, error: subscriptionError } = await supabaseClient
       .from("subscriptions")
       .select("stripe_customer_id")
-      .eq("user_id", user.id)
+      .eq("clerk_user_id", user.id)
       .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();

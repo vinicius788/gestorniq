@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       companies: {
         Row: {
+          clerk_user_id: string
           created_at: string
           currency: string
           data_source: Database["public"]["Enums"]["data_source_type"] | null
@@ -24,9 +25,10 @@ export type Database = {
           onboarding_completed: boolean
           onboarding_completed_at: string | null
           updated_at: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
+          clerk_user_id: string
           created_at?: string
           currency?: string
           data_source?: Database["public"]["Enums"]["data_source_type"] | null
@@ -35,9 +37,10 @@ export type Database = {
           onboarding_completed?: boolean
           onboarding_completed_at?: string | null
           updated_at?: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
+          clerk_user_id?: string
           created_at?: string
           currency?: string
           data_source?: Database["public"]["Enums"]["data_source_type"] | null
@@ -46,42 +49,45 @@ export type Database = {
           onboarding_completed?: boolean
           onboarding_completed_at?: string | null
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: []
       }
       profiles: {
         Row: {
           avatar_url: string | null
+          clerk_user_id: string
           created_at: string
           email_notifications_enabled: boolean
           email: string
           full_name: string | null
           id: string
           updated_at: string
-          user_id: string
+          user_id: string | null
           weekly_reports_enabled: boolean
         }
         Insert: {
           avatar_url?: string | null
+          clerk_user_id: string
           created_at?: string
           email_notifications_enabled?: boolean
           email: string
           full_name?: string | null
           id?: string
           updated_at?: string
-          user_id: string
+          user_id?: string | null
           weekly_reports_enabled?: boolean
         }
         Update: {
           avatar_url?: string | null
+          clerk_user_id?: string
           created_at?: string
           email_notifications_enabled?: boolean
           email?: string
           full_name?: string | null
           id?: string
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
           weekly_reports_enabled?: boolean
         }
         Relationships: []
@@ -135,7 +141,10 @@ export type Database = {
       }
       subscriptions: {
         Row: {
+          amount_cents: number
+          clerk_user_id: string
           created_at: string
+          currency: string
           current_period_end: string | null
           current_period_start: string | null
           id: string
@@ -144,10 +153,13 @@ export type Database = {
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
           updated_at: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
+          amount_cents?: number
+          clerk_user_id: string
           created_at?: string
+          currency?: string
           current_period_end?: string | null
           current_period_start?: string | null
           id?: string
@@ -156,10 +168,13 @@ export type Database = {
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           updated_at?: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
+          amount_cents?: number
+          clerk_user_id?: string
           created_at?: string
+          currency?: string
           current_period_end?: string | null
           current_period_start?: string | null
           id?: string
@@ -168,7 +183,7 @@ export type Database = {
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: []
       }

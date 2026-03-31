@@ -233,7 +233,7 @@ export default function UserGrowth() {
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-sm text-muted-foreground">
-          {isDemoMode ? "Demo data mode is enabled." : "Use manual entries or CSV to keep user metrics up to date."}
+          Use manual entries or CSV to keep user metrics up to date.
         </div>
         <div className="flex items-center gap-2">
           <input

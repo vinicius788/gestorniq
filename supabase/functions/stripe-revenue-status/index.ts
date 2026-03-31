@@ -39,7 +39,7 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const companyIdFromBody = typeof body.company_id === "string" ? body.company_id : null;
 
-    let companyQuery = supabaseClient.from("companies").select("id").eq("user_id", user.id);
+    let companyQuery = supabaseClient.from("companies").select("id").eq("clerk_user_id", user.id);
     if (companyIdFromBody) {
       companyQuery = companyQuery.eq("id", companyIdFromBody);
     }

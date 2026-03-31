@@ -10,6 +10,7 @@ import { useTrial } from "@/hooks/useTrial";
 import { useApp } from "@/app/providers/AppProvider";
 import { DemoModeToggle } from "@/components/dashboard/DemoModeToggle";
 import { supabase } from "@/integrations/supabase/client";
+import { PLAN_PRICES, formatPlanLabel, formatSubscriptionAmount } from "@/lib/stripe-plans";
 import { toast } from "sonner";
 import type { Language } from "@/lib/i18n";
 import { useAuth } from "@/app/providers/AuthProvider";
@@ -71,6 +72,16 @@ export default function Settings() {
     companyName: "",
   });
   const hasPaidSubscription = subscription?.status === "active" || subscription?.status === "trialing";
+  const planFallbackCents = Math.round((PLAN_PRICES[(subscription?.plan ?? "").toLowerCase()] ?? 0) * 100);
+  const amountCents = subscription?.amount_cents && subscription.amount_cents > 0
+    ? subscription.amount_cents
+    : planFallbackCents;
+  const subscriptionPlanLabel = hasPaidSubscription
+    ? `${formatPlanLabel(subscription?.plan)} Plan`
+    : "Free Trial";
+  const subscriptionAmountLabel = hasPaidSubscription
+    ? `${formatSubscriptionAmount(amountCents, subscription?.currency)}/month`
+    : "3-day free access";
 
   useEffect(() => {
     setProfileForm({
@@ -96,7 +107,7 @@ export default function Settings() {
         const { data, error } = await supabase
           .from("profiles")
           .select("email_notifications_enabled,weekly_reports_enabled")
-          .eq("user_id", userId)
+          .eq("clerk_user_id", userId)
           .maybeSingle();
 
         if (error) throw error;
@@ -278,20 +289,11 @@ export default function Settings() {
           email: normalizedEmail,
           updated_at: new Date().toISOString(),
         })
-        .eq("user_id", user.id);
+        .eq("clerk_user_id", user.id);
 
       if (profileError) throw profileError;
 
-      const authUpdates: { email?: string; data?: Record<string, string> } = {
-        data: { full_name: fullName },
-      };
       const emailChanged = normalizedEmail !== (user.email || "").toLowerCase();
-      if (emailChanged) {
-        authUpdates.email = normalizedEmail;
-      }
-
-      const { error: authError } = await supabase.auth.updateUser(authUpdates);
-      if (authError) throw authError;
 
       if (company && companyName !== company.name) {
         await updateCompany({ name: companyName });
@@ -301,7 +303,7 @@ export default function Settings() {
 
       toast.success(
         emailChanged
-          ? "Profile updated. Check your inbox to confirm the email change."
+          ? "Profile updated. Update your primary email in Clerk settings if needed."
           : "Profile updated.",
       );
     } catch (saveError) {
@@ -357,7 +359,7 @@ export default function Settings() {
           weekly_reports_enabled: next.weeklyReport,
           updated_at: new Date().toISOString(),
         })
-        .eq("user_id", user.id)
+        .eq("clerk_user_id", user.id)
         .select("id")
         .maybeSingle();
 
@@ -617,10 +619,10 @@ export default function Settings() {
             
             <div className="p-4 rounded-lg bg-muted/30 border border-border">
               <p className="text-lg font-bold text-foreground">
-                {hasPaidSubscription ? 'Standard Plan' : 'Free Trial'}
+                {subscriptionPlanLabel}
               </p>
               <p className="text-sm text-muted-foreground">
-                {hasPaidSubscription ? 'Annual billing at $39/month (billed yearly).' : '3-day free access'}
+                {subscriptionAmountLabel}
               </p>
               {hasPaidSubscription && subscription?.current_period_end && (
                 <p className="text-xs text-muted-foreground mt-2">

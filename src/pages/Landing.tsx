@@ -5,14 +5,23 @@ import {
   Shield, 
   ArrowRight, 
   Check,
-  LineChart,
+  LineChart as LineChartIcon,
   Calculator,
   FileText,
   Star,
   Layers,
   Target,
-  Sparkles
+  Sparkles,
+  PieChart,
 } from "@/lib/icons";
+import {
+  Line,
+  LineChart as RechartsLineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/app/providers/LanguageProvider";
 import { BrandLogo } from "@/components/brand/BrandLogo";
@@ -81,29 +90,42 @@ export default function Landing() {
       title: t.landing.features.reports.title,
       description: t.landing.features.reports.description,
     },
+    {
+      icon: PieChart,
+      title: "Equity & Share Price Calculator",
+      description:
+        "Enter any equity percentage and instantly see the implied value of that stake based on your live valuation. Perfect for investor conversations and term sheet prep.",
+      badge: "Included in all plans",
+    },
   ];
 
   const howItWorks = [
     { step: 1, icon: Layers, ...t.landing.howItWorks.step1 },
-    { step: 2, icon: LineChart, ...t.landing.howItWorks.step2 },
+    { step: 2, icon: LineChartIcon, ...t.landing.howItWorks.step2 },
     { step: 3, icon: Target, ...t.landing.howItWorks.step3 },
   ];
 
   const testimonials = [
     {
-      quote: "Finally a simple way to track our SaaS metrics without spreadsheets. The investor reports alone saved us hours.",
-      author: "Sarah Chen",
-      role: "CEO, TechFlow",
+      initials: "LM",
+      nameAndRole: "Lucas M. · Co-founder @ Fintech Startup",
+      quote:
+        "I closed my first VC meeting using the dashboard exported directly from GestorNiq. It finally made our story easy to explain.",
+      accentClassName: "bg-chart-2/20 text-chart-2",
     },
     {
-      quote: "The valuation calculator helped us negotiate our Series A with real data. Highly recommend.",
-      author: "Marcus Johnson",
-      role: "Founder, DataSync",
+      initials: "AR",
+      nameAndRole: "Ana R. · Founder @ B2B SaaS",
+      quote:
+        "The MRR breakdown and valuation context helped us prepare for term sheet conversations with much more confidence.",
+      accentClassName: "bg-primary/20 text-primary",
     },
     {
-      quote: "Clean interface, fast setup with demo, manual, or CSV data. Exactly what every SaaS founder needs.",
-      author: "Emma Williams",
-      role: "CTO, CloudBase",
+      initials: "DT",
+      nameAndRole: "Diego T. · CEO @ AI Startup",
+      quote:
+        "In less than one hour we moved from spreadsheets to one investor-ready dashboard with metrics, forecast, and equity context.",
+      accentClassName: "bg-success/20 text-success",
     },
   ];
 
@@ -114,6 +136,14 @@ export default function Landing() {
   ];
 
   const launchMessage = "Launch offer: start in guided mode and get your investor dashboard live today.";
+  const heroMrrTrend = [
+    { month: "Jan", mrr: 28200 },
+    { month: "Feb", mrr: 31800 },
+    { month: "Mar", mrr: 34700 },
+    { month: "Apr", mrr: 37900 },
+    { month: "May", mrr: 41200 },
+    { month: "Jun", mrr: 45200 },
+  ];
 
   return (
     <div className="min-h-screen bg-background">
@@ -201,19 +231,68 @@ export default function Landing() {
                   <div className="w-3 h-3 rounded-full bg-success/60" />
                   <span className="ml-2 text-xs text-muted-foreground">{t.landing.preview.dashboard}</span>
                 </div>
-                <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {[
-                    { label: "MRR", value: "$45,200", change: "+12.5%" },
-                    { label: "ARR", value: "$542K", change: "+12.5%" },
-                    { label: "Net New MRR", value: "$4,800", change: "+8.2%" },
-                    { label: "Valuation", value: "$5.4M", change: "12x ARR" },
-                  ].map((metric) => (
-                    <div key={metric.label} className="p-4 rounded-lg bg-muted/50 border border-border/50">
-                      <p className="text-xs text-muted-foreground">{metric.label}</p>
-                      <p className="text-xl font-bold text-foreground mt-1 whitespace-nowrap tabular-nums">{metric.value}</p>
-                      <p className="text-xs text-success mt-1 tabular-nums">{metric.change}</p>
+                <div className="p-6 space-y-6">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {[
+                      { label: "MRR", value: "$45,200", change: "+12.5%" },
+                      { label: "ARR", value: "$542K", change: "+12.5%" },
+                      { label: "Net New MRR", value: "$4,800", change: "+8.2%" },
+                      { label: "Valuation", value: "$5.4M", change: "12x ARR" },
+                    ].map((metric) => (
+                      <div key={metric.label} className="p-4 rounded-lg bg-muted/50 border border-border/50">
+                        <p className="text-xs text-muted-foreground">{metric.label}</p>
+                        <p className="text-xl font-bold text-foreground mt-1 whitespace-nowrap tabular-nums">{metric.value}</p>
+                        <p className="text-xs text-success mt-1 tabular-nums">{metric.change}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
+                    <div className="mb-3">
+                      <p className="text-sm font-semibold text-foreground">MRR Trend</p>
+                      <p className="text-xs text-muted-foreground">Monthly recurring revenue momentum (demo data)</p>
                     </div>
-                  ))}
+                    <div className="h-44">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <RechartsLineChart data={heroMrrTrend} margin={{ top: 8, right: 10, left: -16, bottom: 0 }}>
+                          <XAxis
+                            dataKey="month"
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
+                          />
+                          <YAxis
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
+                            width={58}
+                            tickFormatter={(value: number) =>
+                              value >= 1000 ? `$${Math.round(value / 1000)}K` : `$${value}`
+                            }
+                          />
+                          <Tooltip
+                            cursor={{ stroke: "hsl(var(--border))", strokeWidth: 1 }}
+                            contentStyle={{
+                              backgroundColor: "hsl(var(--popover))",
+                              border: "1px solid hsl(var(--border))",
+                              borderRadius: "12px",
+                              color: "hsl(var(--popover-foreground))",
+                              fontSize: "12px",
+                            }}
+                            formatter={(value: number) => [`$${value.toLocaleString("en-US")}`, "MRR"]}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="mrr"
+                            stroke="hsl(var(--primary))"
+                            strokeWidth={2.5}
+                            dot={{ r: 3, strokeWidth: 0, fill: "hsl(var(--primary))" }}
+                            activeDot={{ r: 5 }}
+                          />
+                        </RechartsLineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -249,6 +328,46 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* Testimonials */}
+      <section className="py-20 border-t border-border/50">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+              {t.landing.testimonials.title}
+            </h2>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-3 max-w-5xl mx-auto">
+            {testimonials.map((testimonial) => (
+              <div key={testimonial.nameAndRole} className="metric-card border border-border/70 bg-card/70">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div className={`flex h-11 w-11 items-center justify-center rounded-full text-sm font-semibold ${testimonial.accentClassName}`}>
+                    {testimonial.initials}
+                  </div>
+                  <div className="flex items-center gap-1 text-primary">
+                    {[...Array(5)].map((_, index) => (
+                      <Star key={`${testimonial.initials}-star-${index}`} className="h-4 w-4 fill-current" />
+                    ))}
+                  </div>
+                </div>
+
+                <p className="text-sm text-foreground/90 leading-relaxed">
+                  "{testimonial.quote}"
+                </p>
+
+                <p className="mt-4 text-sm font-medium text-muted-foreground">
+                  {testimonial.nameAndRole}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <p className="mt-8 text-center text-sm font-medium text-primary">
+            Trusted by 40+ early-stage founders
+          </p>
+        </div>
+      </section>
+
       {/* Features */}
       <section id="features" className="py-20 border-t border-border/50">
         <div className="container mx-auto px-4">
@@ -261,7 +380,7 @@ export default function Landing() {
             </p>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {features.map((feature) => (
               <div key={feature.title} className="metric-card group">
                 <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4 group-hover:bg-primary/20 transition-colors">
@@ -269,6 +388,11 @@ export default function Landing() {
                 </div>
                 <h3 className="text-lg font-semibold text-foreground mb-2">{feature.title}</h3>
                 <p className="text-sm text-muted-foreground">{feature.description}</p>
+                {"badge" in feature ? (
+                  <span className="mt-4 inline-flex rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                    {feature.badge}
+                  </span>
+                ) : null}
               </div>
             ))}
           </div>
@@ -359,33 +483,6 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Testimonials */}
-      <section className="py-20 border-t border-border/50">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-              {t.landing.testimonials.title}
-            </h2>
-          </div>
-          <div className="grid gap-6 md:grid-cols-3 max-w-5xl mx-auto">
-            {testimonials.map((testimonial, index) => (
-              <div key={index} className="metric-card">
-                <div className="flex gap-1 mb-4">
-                  {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="h-4 w-4 fill-primary text-primary" />
-                  ))}
-                </div>
-                <p className="text-muted-foreground mb-4">"{testimonial.quote}"</p>
-                <div>
-                  <p className="font-medium text-foreground">{testimonial.author}</p>
-                  <p className="text-sm text-muted-foreground">{testimonial.role}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* CTA */}
       <section className="py-20 border-t border-border/50">
         <div className="container mx-auto px-4">
@@ -417,14 +514,12 @@ export default function Landing() {
             <div className="flex items-center gap-6">
               <Link to="/terms" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Terms</Link>
               <Link to="/privacy" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Privacy</Link>
-              <a
-                href="https://x.com/gestoniq22509"
-                target="_blank"
-                rel="noreferrer"
+              <Link
+                to="/support"
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 Support
-              </a>
+              </Link>
             </div>
             <p className="text-sm text-muted-foreground">
               © {currentYear} GestorNiq. All rights reserved.

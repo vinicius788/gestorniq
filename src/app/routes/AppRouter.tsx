@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Loader2 } from "@/lib/icons";
 
 const Index = lazy(() => import("@/pages/Index"));
@@ -37,6 +37,9 @@ export function AppRouter() {
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/dashbord/*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/deshborde/*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/deshboard/*" element={<Navigate to="/dashboard" replace />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/support" element={<Support />} />
@@ -49,6 +52,7 @@ export function AppRouter() {
             <Route path="equity" element={<EquityCalculator />} />
             <Route path="settings" element={<Settings />} />
             <Route path="billing" element={<Billing />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
